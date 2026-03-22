@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AlphaGrid — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700;800&family=Figtree:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #030508;
+  --s2:     #0c1420;
+  --s3:     #111b2d;
+  --border: rgba(255,255,255,.07);
+  --green:  #00ffc8;
+  --blue:   #00b4ff;
+  --purple: #9d5cff;
+  --amber:  #f5a623;
+  --red:    #ff4469;
+  --t1:     #e2eaf5;
+  --t2:     #8da3bf;
+  --t3:     #4a6070;
+  --t4:     #2a3d52;
+  --mono:   'JetBrains Mono', monospace;
+  --head:   'Outfit', sans-serif;
+  --body:   'Figtree', sans-serif;
+  --r:       6px;
+}
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body {
+  width:100%; height:100%;
+  background:var(--bg); color:var(--t1);
+  font-family:var(--body);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+.bg-grid {
+  position:fixed; inset:0; z-index:0;
+  background-image:
+    linear-gradient(rgba(0,255,200,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,255,200,.025) 1px, transparent 1px);
+  background-size:52px 52px;
+  animation:bgPan 90s linear infinite;
+}
+@keyframes bgPan { to { background-position:52px 52px; } }
+
+.bg-glow {
+  position:fixed; inset:0; z-index:0;
+  background:
+    radial-gradient(ellipse 55% 60% at 15% 50%, rgba(0,180,255,.05), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 85% 30%, rgba(0,255,200,.04), transparent 70%);
+}
+
+.wrap {
+  position:relative; z-index:10;
+  display:flex; width:100%; height:100vh;
+}
+
+/* ── Left panel ── */
+.left {
+  width:52%;
+  display:flex; flex-direction:column; justify-content:center;
+  padding:0 72px;
+  border-right:1px solid var(--border);
+  position:relative; overflow:hidden;
+}
+.left::after {
+  content:'';
+  position:absolute; top:0; right:0;
+  width:1px; height:100%;
+  background:linear-gradient(180deg, transparent, rgba(0,255,200,.22), transparent);
+}
+
+.brand { display:flex; align-items:center; gap:14px; margin-bottom:52px; }
+.brand-icon {
+  width:44px; height:44px; border-radius:var(--r);
+  background:rgba(0,255,200,.08); border:1px solid rgba(0,255,200,.28);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--head); font-size:20px; font-weight:800; color:var(--green);
+}
+.brand-name {
+  font-family:var(--head); font-size:20px; font-weight:800;
+  letter-spacing:.13em; color:var(--t1); text-transform:uppercase;
+}
+.brand-sub {
+  display:block; font-family:var(--mono);
+  font-size:9px; font-weight:300; color:var(--t3);
+  letter-spacing:.2em; margin-top:2px;
+}
+
+.headline {
+  font-family:var(--head); font-size:40px; font-weight:800;
+  line-height:1.08; letter-spacing:-.02em; color:var(--t1); margin-bottom:18px;
+}
+.headline .accent { color:var(--green); }
+
+.desc {
+  font-family:var(--body); font-size:14px; font-weight:300;
+  color:var(--t3); line-height:1.7; max-width:380px; margin-bottom:44px;
+}
+
+.features { display:flex; flex-direction:column; gap:13px; }
+.feat { display:flex; align-items:center; gap:12px; }
+.feat-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.feat-text { font-family:var(--body); font-size:13px; font-weight:300; color:var(--t3); }
+.feat-text strong { color:var(--t2); font-weight:500; }
+
+.ver-tag {
+  position:absolute; bottom:28px; left:72px;
+  font-family:var(--mono); font-size:9px; font-weight:300;
+  color:var(--t4); letter-spacing:.14em;
+}
+
+/* ── Right panel ── */
+.right {
+  flex:1;
+  display:flex; align-items:center; justify-content:center;
+  padding:32px;
+}
+
+.form-card { width:100%; max-width:380px; }
+
+.form-header { margin-bottom:28px; }
+.form-title {
+  font-family:var(--head); font-size:24px; font-weight:700;
+  letter-spacing:-.01em; color:var(--t1); margin-bottom:6px;
+}
+.form-sub {
+  font-family:var(--body); font-size:13px; font-weight:300;
+  color:var(--t3); line-height:1.5;
+}
+
+.auth-tabs {
+  display:flex;
+  border:1px solid var(--border);
+  border-radius:var(--r); overflow:hidden;
+  margin-bottom:24px;
+}
+.auth-tab {
+  flex:1; padding:10px; text-align:center; cursor:pointer;
+  font-family:var(--head); font-size:12px; font-weight:600;
+  letter-spacing:.07em; text-transform:uppercase;
+  color:var(--t3); background:none; border:none;
+  transition:all .15s;
+}
+.auth-tab:first-child { border-right:1px solid var(--border); }
+.auth-tab.active { background:rgba(0,255,200,.07); color:var(--green); }
+
+.field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+.field-label {
+  font-family:var(--body); font-size:10px; font-weight:500;
+  color:var(--t3); letter-spacing:.1em; text-transform:uppercase;
+}
+.field-input {
+  width:100%; padding:11px 14px;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  color:var(--t1); font-family:var(--mono); font-size:13px;
+  outline:none;
+  transition:border-color .15s, background .15s;
+}
+.field-input:focus {
+  border-color:rgba(0,255,200,.38);
+  background:rgba(0,255,200,.02);
+}
+.field-input::placeholder { color:var(--t4); }
+
+/* Role selector */
+.role-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+.role-card {
+  padding:13px 14px; border-radius:var(--r); cursor:pointer;
+  border:1px solid var(--border); background:rgba(255,255,255,.02);
+  transition:all .15s; position:relative;
+}
+.role-card:hover { border-color:rgba(255,255,255,.14); }
+.role-card.sel-trader  { border-color:rgba(0,180,255,.45); background:rgba(0,180,255,.06); }
+.role-card.sel-builder { border-color:rgba(0,255,200,.45); background:rgba(0,255,200,.06); }
+.role-dot { width:8px; height:8px; border-radius:50%; margin-bottom:8px; }
+.role-dot.trader  { background:var(--blue); }
+.role-dot.builder { background:var(--green); }
+.role-name { font-family:var(--head); font-size:12px; font-weight:700; color:var(--t1); margin-bottom:3px; }
+.role-desc { font-family:var(--body); font-size:9px; font-weight:300; color:var(--t3); line-height:1.4; }
+.role-check {
+  position:absolute; top:9px; right:9px;
+  width:14px; height:14px; border-radius:50%;
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:8px;
+}
+.role-card.sel-trader  .role-check { background:var(--blue);  border-color:var(--blue);  color:#030508; }
+.role-card.sel-builder .role-check { background:var(--green); border-color:var(--green); color:#030508; }
+
+/* Password strength */
+.pw-bars { display:flex; gap:4px; margin-top:6px; height:3px; }
+.pw-seg { flex:1; border-radius:2px; background:rgba(255,255,255,.06); transition:background .25s; }
+.pw-seg.weak   { background:var(--red); }
+.pw-seg.fair   { background:var(--amber); }
+.pw-seg.good   { background:var(--blue); }
+.pw-seg.strong { background:var(--green); }
+.pw-label { font-size:9px; font-family:var(--body); color:var(--t3); margin-top:4px; }
+
+/* Submit */
+.submit-btn {
+  width:100%; padding:13px; margin-top:6px;
+  background:linear-gradient(135deg, rgba(0,255,200,.11), rgba(0,180,255,.09));
+  border:1px solid rgba(0,255,200,.32);
+  border-radius:var(--r); color:var(--green);
+  font-family:var(--head); font-size:13px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  cursor:pointer; transition:all .15s;
+}
+.submit-btn:hover {
+  background:linear-gradient(135deg, rgba(0,255,200,.2), rgba(0,180,255,.15));
+  border-color:rgba(0,255,200,.6);
+}
+.submit-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+.btn-spinner {
+  display:inline-block; width:12px; height:12px;
+  border:2px solid rgba(0,255,200,.25);
+  border-top-color:var(--green);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+  vertical-align:middle; margin-right:6px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.form-msg {
+  padding:10px 14px; border-radius:var(--r);
+  font-family:var(--body); font-size:12px; font-weight:400;
+  line-height:1.5; margin-top:10px; display:none;
+}
+.form-msg.show { display:block; }
+.form-msg.err { background:rgba(255,68,105,.07); border:1px solid rgba(255,68,105,.28); color:rgba(255,68,105,.9); }
+.form-msg.ok  { background:rgba(0,255,200,.07); border:1px solid rgba(0,255,200,.28); color:var(--green); }
+
+/* Credentials panel */
+.creds-panel {
+  margin-top:18px; border-radius:var(--r); overflow:hidden;
+  border:1px solid var(--border);
+}
+.creds-header {
+  padding:8px 14px;
+  background:rgba(255,255,255,.03);
+  border-bottom:1px solid var(--border);
+  font-family:var(--body); font-size:9px; font-weight:600;
+  color:var(--t3); letter-spacing:.1em; text-transform:uppercase;
+}
+.cred-row {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 14px;
+  border-bottom:1px solid rgba(255,255,255,.04);
+}
+.cred-row:last-child { border-bottom:none; }
+.cred-row.owner-row {
+  background:rgba(157,92,255,.06);
+  border-bottom:1px solid rgba(157,92,255,.12);
+}
+.cred-label {
+  font-family:var(--body); font-size:10px; font-weight:500;
+  color:var(--t3); min-width:54px;
+}
+.cred-row.owner-row .cred-label { color:var(--purple); font-weight:700; }
+.cred-val { font-family:var(--mono); font-size:9px; color:var(--t2); flex:1; }
+.cred-row.owner-row .cred-val { color:var(--t1); }
+.cred-fill {
+  font-family:var(--body); font-size:9px; font-weight:600;
+  color:var(--green); cursor:pointer;
+  padding:2px 8px; border:1px solid rgba(0,255,200,.2);
+  border-radius:3px; background:rgba(0,255,200,.05);
+  transition:all .12s; white-space:nowrap;
+}
+.cred-fill:hover { background:rgba(0,255,200,.12); border-color:rgba(0,255,200,.4); }
+
+/* Owner info note */
+.owner-note {
+  margin-top:10px; padding:10px 14px;
+  background:rgba(157,92,255,.05);
+  border:1px solid rgba(157,92,255,.15);
+  border-radius:var(--r);
+}
+.owner-note-title {
+  font-family:var(--mono); font-size:9px; font-weight:500;
+  color:var(--purple); letter-spacing:.07em; margin-bottom:5px;
+}
+.owner-note-body {
+  font-family:var(--body); font-size:10px; font-weight:300;
+  color:var(--t3); line-height:1.6;
+}
+.owner-note-body code {
+  font-family:var(--mono); font-size:9px; color:var(--t2);
+  background:rgba(255,255,255,.06); padding:1px 5px; border-radius:3px;
+}
+
+@media(max-width:860px) {
+  .left { display:none; }
+  .right { padding:20px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<div class="wrap">
+
+  <!-- Left branding -->
+  <div class="left">
+    <div class="brand">
+      <div class="brand-icon">▲</div>
+      <div>
+        <div class="brand-name">AlphaGrid</div>
+        <span class="brand-sub">Trading Intelligence v6</span>
+      </div>
+    </div>
+
+    <div class="headline">Edge-driven<br>trading<br><span class="accent">intelligence.</span></div>
+
+    <p class="desc">Real-time ML signals, live broker execution, and institutional-grade analytics — all in one platform.</p>
+
+    <div class="features">
+      <div class="feat"><div class="feat-dot" style="background:var(--green)"></div><div class="feat-text"><strong>Live signals</strong> — LSTM + Transformer + LightGBM ensemble</div></div>
+      <div class="feat"><div class="feat-dot" style="background:var(--blue)"></div><div class="feat-text"><strong>Multi-broker execution</strong> — Alpaca, OANDA, Robinhood</div></div>
+      <div class="feat"><div class="feat-dot" style="background:var(--purple)"></div><div class="feat-text"><strong>Model evaluation</strong> — F1, ROC-AUC, MCC, auto-upgrade</div></div>
+      <div class="feat"><div class="feat-dot" style="background:var(--amber)"></div><div class="feat-text"><strong>10-year real data</strong> — yfinance, no API key required</div></div>
+    </div>
+
+    <div class="ver-tag">AlphaGrid v6 · FastAPI · SQLite · JWT · yfinance</div>
+  </div>
+
+  <!-- Right form -->
+  <div class="right">
+    <div class="form-card">
+
+      <div class="form-header">
+        <div class="form-title" id="form-title">Welcome back</div>
+        <div class="form-sub"   id="form-sub">Sign in to your AlphaGrid account</div>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login"  onclick="showLogin()">Sign In</button>
+        <button class="auth-tab"        id="tab-signup" onclick="showSignup()">Create Account</button>
+      </div>
+
+      <!-- ── LOGIN FORM ── -->
+      <div id="login-form">
+        <div class="field">
+          <label class="field-label">Username or Email</label>
+          <input class="field-input" id="l-ident" type="text"
+                 placeholder="admin or you@example.com"
+                 autocomplete="username">
+        </div>
+        <div class="field">
+          <label class="field-label">Password</label>
+          <input class="field-input" id="l-pass" type="password"
+                 placeholder="••••••••"
+                 autocomplete="current-password">
+        </div>
+
+        <div class="form-msg" id="login-msg"></div>
+        <button class="submit-btn" id="login-btn" onclick="doLogin()">Sign In</button>
+
+        <!-- Credentials panel -->
+        <div class="creds-panel" style="margin-top:18px">
+          <div class="creds-header">Default Accounts</div>
+          <!-- Owner row — highlighted -->
+          <div class="cred-row owner-row">
+            <span class="cred-label">⚑ Owner</span>
+            <span class="cred-val">admin / Admin@Grid1</span>
+            <span class="cred-fill" onclick="fillCreds('admin','Admin@Grid1')">Fill</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">Builder</span>
+            <span class="cred-val">builder@alphagrid.app / Builder1!</span>
+            <span class="cred-fill" onclick="fillCreds('builder@alphagrid.app','Builder1!')">Fill</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">Trader</span>
+            <span class="cred-val">trader@alphagrid.app / Trader1!</span>
+            <span class="cred-fill" onclick="fillCreds('trader@alphagrid.app','Trader1!')">Fill</span>
+          </div>
+        </div>
+
+        <!-- Owner note -->
+        <div class="owner-note">
+          <div class="owner-note-title">⚑ Owner Account</div>
+          <div class="owner-note-body">
+            Sign in with username <code>admin</code> — no email required.
+            The owner account cannot be deactivated.
+            <br>Change <code>Admin@Grid1</code> after first login.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SIGNUP FORM ── -->
+      <div id="signup-form" style="display:none">
+        <div class="field">
+          <label class="field-label">Full Name</label>
+          <input class="field-input" id="s-name"  type="text"     placeholder="Alex Trader"          autocomplete="name">
+        </div>
+        <div class="field">
+          <label class="field-label">Email</label>
+          <input class="field-input" id="s-email" type="email"    placeholder="you@example.com"      autocomplete="email">
+        </div>
+        <div class="field">
+          <label class="field-label">Username <span style="color:var(--t4);font-weight:300">(optional)</span></label>
+          <input class="field-input" id="s-uname" type="text"     placeholder="auto-generated if blank" autocomplete="username">
+        </div>
+        <div class="field">
+          <label class="field-label">Password</label>
+          <input class="field-input" id="s-pass"  type="password" placeholder="Min 8 characters"    autocomplete="new-password"
+                 oninput="updatePwStrength(this.value)">
+          <div class="pw-bars">
+            <div class="pw-seg" id="ps1"></div><div class="pw-seg" id="ps2"></div>
+            <div class="pw-seg" id="ps3"></div><div class="pw-seg" id="ps4"></div>
+          </div>
+          <div class="pw-label" id="pw-label">Enter a password</div>
+        </div>
+
+        <div style="font-family:var(--body);font-size:10px;font-weight:500;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px">Account Type</div>
+        <div class="role-grid">
+          <div class="role-card sel-trader" id="role-trader" onclick="selectRole('trader')">
+            <div class="role-dot trader"></div>
+            <div class="role-name">Trader</div>
+            <div class="role-desc">Portfolio, signals, chart, broker execution</div>
+            <div class="role-check" id="rc-trader">✓</div>
+          </div>
+          <div class="role-card" id="role-builder" onclick="selectRole('builder')">
+            <div class="role-dot builder"></div>
+            <div class="role-name">Builder</div>
+            <div class="role-desc">Everything + system logs, model eval, strategy lab</div>
+            <div class="role-check" id="rc-builder"></div>
+          </div>
+        </div>
+
+        <div class="form-msg" id="signup-msg"></div>
+        <button class="submit-btn" id="signup-btn" onclick="doSignup()">Create Account</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let _role = 'trader';
+
+// ── Auto-redirect if already authenticated ────────────────────────────────────
+(function checkExistingSession() {
+  const token = localStorage.getItem('ag_access_token');
+  if (!token) return;
+  try {
+    let payload;
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const b64 = parts[1];
+      const pad = '='.repeat((4 - b64.length % 4) % 4);
+      payload = JSON.parse(atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/')));
+    } else {
+      payload = JSON.parse(atob((token + '==').replace(/-/g,'+').replace(/_/g,'/')));
+    }
+    const exp = typeof payload.exp === 'string'
+      ? new Date(payload.exp).getTime() / 1000
+      : payload.exp;
+    if (exp && Date.now() / 1000 < exp) {
+      window.location.href = '/dashboard';
+    }
+  } catch(e) { /* token invalid — stay on login page */ }
+})();
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function showLogin() {
+  document.getElementById('login-form').style.display  = 'block';
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('tab-login').classList.add('active');
+  document.getElementById('tab-signup').classList.remove('active');
+  document.getElementById('form-title').textContent = 'Welcome back';
+  document.getElementById('form-sub').textContent   = 'Sign in to your AlphaGrid account';
+}
+
+function showSignup() {
+  document.getElementById('login-form').style.display  = 'none';
+  document.getElementById('signup-form').style.display = 'block';
+  document.getElementById('tab-login').classList.remove('active');
+  document.getElementById('tab-signup').classList.add('active');
+  document.getElementById('form-title').textContent = 'Create account';
+  document.getElementById('form-sub').textContent   = 'Join AlphaGrid — choose your role';
+}
+
+// ── Role selector ──────────────────────────────────────────────────────────────
+function selectRole(r) {
+  _role = r;
+  ['trader', 'builder'].forEach(x => {
+    document.getElementById('role-' + x).className = 'role-card' + (x === r ? ' sel-' + x : '');
+    document.getElementById('rc-' + x).textContent = (x === r) ? '✓' : '';
+  });
+}
+
+// ── Password strength meter ────────────────────────────────────────────────────
+function updatePwStrength(pw) {
+  const segs  = [1,2,3,4].map(i => document.getElementById('ps' + i));
+  const label = document.getElementById('pw-label');
+  let score = 0;
+  if (pw.length >= 8)            score++;
+  if (/[A-Z]/.test(pw))         score++;
+  if (/[0-9]/.test(pw))         score++;
+  if (/[^A-Za-z0-9]/.test(pw))  score++;
+  const levels = ['', 'weak', 'fair', 'good', 'strong'];
+  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
+  const colors = ['', 'var(--red)', 'var(--amber)', 'var(--blue)', 'var(--green)'];
+  segs.forEach((el, i) => { el.className = 'pw-seg' + (i < score ? ' ' + levels[score] : ''); });
+  label.textContent = pw ? (labels[score] || 'Weak') : 'Enter a password';
+  label.style.color = colors[score] || 'var(--t3)';
+}
+
+// ── Fill credentials (one-click) ───────────────────────────────────────────────
+function fillCreds(ident, pass) {
+  document.getElementById('l-ident').value = ident;
+  document.getElementById('l-pass').value  = pass;
+  const msg = document.getElementById('login-msg');
+  msg.className = 'form-msg';   // clear any error
+}
+
+// ── Message helper ─────────────────────────────────────────────────────────────
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className   = 'form-msg show ' + type;
+}
+function clearMsg(id) {
+  const el = document.getElementById(id);
+  if (el) el.className = 'form-msg';
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const ident = document.getElementById('l-ident').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  clearMsg('login-msg');
+
+  if (!ident || !pass) {
+    showMsg('login-msg', 'Enter your username (or email) and password.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="btn-spinner"></span>Signing in…';
+
+  try {
+    const resp = await fetch(API + '/api/auth/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        email:    ident,   // sent as both so backend resolves whichever matches
+        username: ident,
+        password: pass,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showMsg('login-msg', data.error || 'Sign in failed — check your credentials.', 'err');
+      btn.disabled  = false;
+      btn.innerHTML = 'Sign In';
+      return;
+    }
+
+    // Store tokens and user
+    localStorage.setItem('ag_access_token',  data.access_token);
+    localStorage.setItem('ag_refresh_token', data.refresh_token);
+    localStorage.setItem('ag_user',          JSON.stringify(data.user));
+
+    const name = data.user?.display_name || data.user?.username || 'there';
+    showMsg('login-msg', `Welcome back, ${name} ✓`, 'ok');
+    setTimeout(() => { window.location.href = '/dashboard'; }, 500);
+
+  } catch (e) {
+    showMsg('login-msg',
+      'Cannot reach AlphaGrid server. Is it running on this host?', 'err');
+    btn.disabled  = false;
+    btn.innerHTML = 'Sign In';
+  }
+}
+
+// ── SIGN UP ───────────────────────────────────────────────────────────────────
+async function doSignup() {
+  const name  = document.getElementById('s-name').value.trim();
+  const email = document.getElementById('s-email').value.trim();
+  const uname = document.getElementById('s-uname').value.trim();
+  const pass  = document.getElementById('s-pass').value;
+  clearMsg('signup-msg');
+
+  if (!name)                       { showMsg('signup-msg', 'Enter your full name.', 'err');              return; }
+  if (!email || !email.includes('@')) { showMsg('signup-msg', 'Enter a valid email address.', 'err');    return; }
+  if (pass.length < 8)             { showMsg('signup-msg', 'Password must be at least 8 characters.', 'err'); return; }
+
+  const btn = document.getElementById('signup-btn');
+  btn.disabled  = true;
+  btn.innerHTML = '<span class="btn-spinner"></span>Creating account…';
+
+  try {
+    const resp = await fetch(API + '/api/auth/signup', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        email,
+        username:      uname || '',     // blank = auto-generated from email
+        password:      pass,
+        display_name:  name,
+        role:          _role,
+      }),
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      showMsg('signup-msg', data.error || 'Signup failed.', 'err');
+      btn.disabled  = false;
+      btn.innerHTML = 'Create Account';
+      return;
+    }
+
+    localStorage.setItem('ag_access_token',  data.access_token);
+    localStorage.setItem('ag_refresh_token', data.refresh_token);
+    localStorage.setItem('ag_user',          JSON.stringify(data.user));
+
+    showMsg('signup-msg', 'Account created! Redirecting…', 'ok');
+    setTimeout(() => { window.location.href = '/dashboard'; }, 600);
+
+  } catch (e) {
+    showMsg('signup-msg', 'Cannot reach server.', 'err');
+    btn.disabled  = false;
+    btn.innerHTML = 'Create Account';
+  }
+}
+
+// ── Enter key triggers active form ────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const loginVisible = document.getElementById('login-form').style.display !== 'none';
+  if (loginVisible) doLogin(); else doSignup();
+});
+</script>
+</body>
+</html>

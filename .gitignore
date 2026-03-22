@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+alphagrid-env/
+
+# Environment secrets — NEVER commit
+.env
+config/settings.yaml
+
+# Model checkpoints (large files)
+models/*.pt
+models/*.pkl
+models/*.bin
+models/*.h5
+
+# Databases (contain real data)
+*.db
+*.duckdb
+
+# Logs
+logs/
+*.log
+
+# Data cache
+data/alphagrid_history.db
+data/*.parquet
+data/*.csv
+cache/
+
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
