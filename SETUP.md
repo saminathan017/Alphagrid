@@ -1,4 +1,4 @@
-# AlphaGrid v6 — Complete Setup Guide
+# AlphaGrid v7 — Complete Setup Guide
 ### MacBook M4 · VS Code · Python 3.11
 
 ---
@@ -18,10 +18,10 @@
 
 ## Step 1 — Open the project in VS Code
 
-Move the `alphagrid-v6` folder anywhere on your Mac, then:
+Move the `alphagrid` folder anywhere on your Mac, then:
 
 ```
-VS Code → File → Open Folder → select alphagrid-v6
+VS Code → File → Open Folder → select alphagrid
 ```
 
 Open the integrated terminal:
@@ -37,9 +37,9 @@ All commands below are typed in that terminal.
 ## Step 2 — Create the virtual environment
 
 ```bash
-# Make sure you're in the alphagrid-v6 folder
+# Make sure you're in the alphagrid folder
 pwd
-# Should show something like /Users/yourname/alphagrid-v6
+# Should show something like /Users/yourname/alphagrid
 
 # Create venv with Python 3.11
 python3.11 -m venv venv
@@ -214,7 +214,7 @@ Restart the server after training to load saved model checkpoints.
 ## Project structure
 
 ```
-alphagrid-v6/
+alphagrid/
 │
 ├── core/
 │   ├── auth_db.py          ← Auth: users, JWT, sessions, owner account
@@ -305,7 +305,7 @@ Without training = Tier D (the architecture needs training to activate).
 
 **`venv` not activating**
 ```bash
-cd /path/to/alphagrid-v6   # must be in project root
+cd /path/to/alphagrid   # must be in project root
 python3.11 -m venv venv
 source venv/bin/activate
 ```

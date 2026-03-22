@@ -1,5 +1,5 @@
 """
-execution/broker_manager.py  —  AlphaGrid v4
+execution/broker_manager.py  —  AlphaGrid v7
 =============================================
 Multi-broker abstraction layer.
 

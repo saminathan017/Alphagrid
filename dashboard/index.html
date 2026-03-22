@@ -449,7 +449,7 @@ input, select, textarea { font-family: inherit; }
 .tape {
   display: flex;
   white-space: nowrap;
-  animation: tapeScroll 60s linear infinite;
+  animation: tapeScroll 40s linear infinite;
 }
 .tape:hover { animation-play-state: paused; }
 @keyframes tapeScroll { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
@@ -1005,37 +1005,6 @@ input, select, textarea { font-family: inherit; }
 .cm-val.red   { color: var(--red); }
 .cm-lbl { font-size: 8px; font-family: var(--font-body); color: var(--t3); margin-top: 3px; }
 
-/* ════════════════════════════════════════════════════
-   HISTORY PAGE SPECIFIC
-════════════════════════════════════════════════════ */
-.hist-sym-btn {
-  padding: 6px 9px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: none;
-  font-family: var(--font-head);
-  font-size: 10px; font-weight: 600;
-  color: var(--t3);
-  cursor: pointer;
-  transition: all .12s;
-  text-align: center;
-}
-.hist-sym-btn:hover { border-color: rgba(0,255,200,.3); color: var(--t1); }
-.hist-sym-btn.active { border-color: rgba(0,255,200,.5); background: rgba(0,255,200,.08); color: var(--green); }
-.hist-iv-btn {
-  padding: 6px 12px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: none;
-  font-family: var(--font-head);
-  font-size: 10px; font-weight: 700;
-  color: var(--t3);
-  cursor: pointer;
-  transition: all .12s;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-}
-.hist-iv-btn.active { border-color: rgba(0,180,255,.45); background: rgba(0,180,255,.08); color: var(--blue); }
 
 /* ════════════════════════════════════════════════════
    REMOVE BROKER MODAL
@@ -1217,19 +1186,6 @@ input, select, textarea { font-family: inherit; }
 .sv           { font-family: var(--font-head); font-size: 21px; font-weight: 700; color: var(--t1); line-height: 1; }
 .sv.g { color: var(--green); } .sv.r { color: var(--red); } .sv.b { color: var(--blue); } .sv.y { color: var(--amber); }
 .ss           { font-size: 10px; font-weight: 300; font-family: var(--font-body); color: var(--t3); margin-top: 5px; }
-/* History compat */
-.hist-sym-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px,1fr)); gap: 6px; }
-.hist-stat-card { background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
-.hist-stat-label { font-size: 9px; font-weight: 500; font-family: var(--font-body); color: var(--t3); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 5px; }
-.hist-stat-val { font-family: var(--font-head); font-size: 18px; font-weight: 700; color: var(--t1); }
-.hist-progress-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
-.hist-progress-row:last-child { border-bottom: none; }
-.hist-prog-sym { font-family: var(--font-head); font-size: 10px; font-weight: 700; color: var(--blue); width: 70px; }
-.hist-prog-bar { flex: 1; height: 4px; background: rgba(255,255,255,.06); border-radius: 2px; overflow: hidden; }
-.hist-prog-fill { height: 100%; border-radius: 2px; background: var(--green); transition: width .5s; }
-.hist-prog-val { font-family: var(--font-mono); font-size: 9px; color: var(--t3); width: 60px; text-align: right; }
-.hist-interval-btn { padding: 6px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: none; font-family: var(--font-head); font-size: 10px; font-weight: 700; color: var(--t3); cursor: pointer; transition: all .12s; text-transform: uppercase; letter-spacing: .06em; }
-.hist-interval-btn.active { border-color: rgba(0,180,255,.45); background: rgba(0,180,255,.08); color: var(--blue); }
 /* Old remove modal compat */
 .rm-overlay   { position: fixed; inset: 0; z-index: 9000; background: rgba(3,5,8,.88); display: flex; align-items: center; justify-content: center; }
 .rm-modal     { background: var(--surface-3); border: 1px solid rgba(255,68,105,.3); border-radius: var(--r-lg); padding: 28px 32px; width: 440px; max-width: 93vw; }
@@ -1337,10 +1293,6 @@ input, select, textarea { font-family: inherit; }
         <span class="nav-section-label">Research</span>
         <button class="nav-item" onclick="sw('universe',this)">
           <span class="nav-icon">◎</span>Universe
-        </button>
-        <button class="nav-item" onclick="sw('history',this)">
-          <span class="nav-icon">⊙</span>History
-          <span class="nav-badge badge-blue" style="background:rgba(0,180,255,.1);color:var(--blue);border-color:rgba(0,180,255,.2)">10Y</span>
         </button>
         <button class="nav-item" onclick="sw('risk',this)">
           <span class="nav-icon">◬</span>Risk
@@ -1835,119 +1787,6 @@ input, select, textarea { font-family: inherit; }
 </div>
 
 
-<!-- ══════════════════════════════ HISTORY PAGE ═══════════════════════════ -->
-<div class="page" id="pg-history">
-
-  <!-- Header row -->
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
-    <div>
-      <div style="font-family:var(--font-head);font-size:18px;font-weight:700;color:var(--t1)">10-Year Historical Data</div>
-      <div style="font-family:var(--font-body);font-size:11px;font-weight:300;color:var(--t3);margin-top:3px">
-        Real OHLCV data from Yahoo Finance — no simulation, no samples. Up to 2,520 trading days per symbol.
-      </div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="triggerFullDownload()" style="font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:.08em;padding:9px 14px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.08);color:var(--green);border-radius:3px;cursor:pointer;text-transform:uppercase">
-        ↓ Download All
-      </button>
-      <button onclick="renderHistoryPage()" style="font-family:var(--font-head);font-size:10px;font-weight:600;letter-spacing:.08em;padding:9px 14px;border:1px solid rgba(255,255,255,.12);background:none;color:var(--t3);border-radius:3px;cursor:pointer">
-        ↻ Refresh
-      </button>
-    </div>
-  </div>
-
-  <!-- DB Status stats -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px" id="hist-stats-row">
-    <div class="hist-stat-card"><div class="hist-stat-label">Total Bars</div><div class="hist-stat-val" id="hist-total-bars">—</div></div>
-    <div class="hist-stat-card"><div class="hist-stat-label">Symbols Cached</div><div class="hist-stat-val b" id="hist-syms-cached">—</div></div>
-    <div class="hist-stat-card"><div class="hist-stat-label">DB Status</div><div class="hist-stat-val" id="hist-db-status">—</div></div>
-    <div class="hist-stat-card"><div class="hist-stat-label">Data Source</div><div class="hist-stat-val g" style="font-size:12px">Yahoo Finance</div><div style="font-size:8px;font-family:var(--font-body);color:var(--t3);margin-top:2px">Free · Real · No key</div></div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start">
-
-    <!-- Left: symbol selector -->
-    <div class="panel">
-      <div class="ph"><span class="pt">Symbol</span><span class="badge bb" id="hist-sym-count">—</span></div>
-      <div class="pb2">
-        <input id="hist-sym-search" placeholder="Search symbols…" oninput="filterHistSymbols(this.value)"
-          style="width:100%;padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none;margin-bottom:10px">
-        <div id="hist-sym-grid" class="hist-sym-grid" style="max-height:320px;overflow-y:auto"></div>
-      </div>
-    </div>
-
-    <!-- Right: data view -->
-    <div style="display:flex;flex-direction:column;gap:12px">
-
-      <!-- Interval selector + date range -->
-      <div class="panel">
-        <div class="ph"><span class="pt">Interval & Range</span><span class="badge bg" id="hist-data-badge">—</span></div>
-        <div class="pb2" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="hist-interval-btn active" data-iv="1d"  onclick="setHistInterval('1d')">Daily</button>
-            <button class="hist-interval-btn"        data-iv="1h"  onclick="setHistInterval('1h')">1H</button>
-            <button class="hist-interval-btn"        data-iv="15m" onclick="setHistInterval('15m')">15M</button>
-            <button class="hist-interval-btn"        data-iv="5m"  onclick="setHistInterval('5m')">5M</button>
-            <button class="hist-interval-btn"        data-iv="1m"  onclick="setHistInterval('1m')">1M</button>
-          </div>
-          <div style="flex:1;display:flex;gap:8px;flex-wrap:wrap">
-            <div style="display:flex;flex-direction:column;gap:3px">
-              <div style="font-size:8px;font-family:var(--font-body);color:var(--t3);letter-spacing:.1em;text-transform:uppercase">From</div>
-              <input type="date" id="hist-from" value="2015-01-01" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:5px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-            </div>
-            <div style="display:flex;flex-direction:column;gap:3px">
-              <div style="font-size:8px;font-family:var(--font-body);color:var(--t3);letter-spacing:.1em;text-transform:uppercase">To</div>
-              <input type="date" id="hist-to" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:5px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-            </div>
-            <button onclick="loadHistData()" style="align-self:flex-end;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:.08em;padding:7px 14px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.08);color:var(--green);border-radius:3px;cursor:pointer;text-transform:uppercase">Load</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Symbol stats -->
-      <div class="panel" id="hist-sym-stats-panel" style="display:none">
-        <div class="ph"><span class="pt" id="hist-sym-stats-title">Symbol Data</span></div>
-        <div class="pb2" id="hist-sym-stats"></div>
-      </div>
-
-      <!-- Chart -->
-      <div class="panel">
-        <div class="ph">
-          <span class="pt" id="hist-chart-title">Select a symbol</span>
-          <div style="display:flex;gap:6px">
-            <span class="badge bb" id="hist-chart-badge">—</span>
-            <button onclick="exportHistCSV()" id="hist-export-btn" style="display:none;font-family:var(--font-body);font-size:9px;font-weight:500;padding:2px 8px;border:1px solid rgba(0,180,255,.3);background:rgba(0,180,255,.07);color:var(--blue);border-radius:2px;cursor:pointer">↓ CSV</button>
-          </div>
-        </div>
-        <div id="hist-chart" style="height:340px;position:relative;z-index:10"></div>
-        <div id="hist-no-data" style="display:none;padding:40px;text-align:center;color:var(--t3);font-family:var(--font-body)">
-          Select a symbol and click Load to view historical data
-        </div>
-      </div>
-
-      <!-- Data table -->
-      <div class="panel">
-        <div class="ph">
-          <span class="pt">Raw OHLCV Data</span>
-          <span class="badge by" id="hist-table-count">— rows</span>
-        </div>
-        <div class="scw" style="max-height:300px">
-          <table class="tbl">
-            <thead><tr><th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th><th>Change%</th></tr></thead>
-            <tbody id="hist-data-tb"><tr><td colspan="7" style="text-align:center;padding:20px;color:var(--t3);font-family:var(--font-body)">Select symbol and load data</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Download progress -->
-  <div class="panel" style="margin-top:14px" id="hist-progress-panel">
-    <div class="ph"><span class="pt">Download Progress</span><span class="badge bb" id="hist-prog-badge">—</span></div>
-    <div class="pb2" id="hist-progress-list" style="max-height:200px;overflow-y:auto"></div>
-  </div>
-</div>
 
 
 
@@ -2035,14 +1874,37 @@ setInterval(() => { $('clk').textContent = new Date().toUTCString().split(' ')[4
 // ── Tab switching ────────────────────────────────────────────────────────────
 function sw(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  $('pg-' + name).classList.add('active');
-  el.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+  const pg = $('pg-' + name);
+  if (!pg) return;
+  pg.classList.add('active');
+  if (el) el.classList.add('active');
+  S.page = name;
+  location.hash = name;
   const acts = { signals: renderSignalsPage, universe: renderUniversePage,
                  trades: renderTradesPage, models: renderModelsPage, risk: renderRiskPage,
-                 history: renderHistoryPage,
                  chart: () => requestAnimationFrame(() => loadChart()) };
   if (acts[name]) acts[name]();
+}
+
+function restorePageFromHash() {
+  const hash = location.hash.replace('#', '');
+  const valid = ['overview','signals','universe','trades','chart','broker','models','risk','eval'];
+  if (!hash || !valid.includes(hash)) return;
+  // Find the nav button for this page
+  const el = document.querySelector(`[onclick*="sw('${hash}"]`);
+  // Apply page switch without re-writing the hash (already correct)
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+  const pg = $('pg-' + hash);
+  if (!pg) return;
+  pg.classList.add('active');
+  if (el) el.classList.add('active');
+  S.page = hash;
+  const acts = { signals: renderSignalsPage, universe: renderUniversePage,
+                 trades: renderTradesPage, models: renderModelsPage, risk: renderRiskPage,
+                 chart: () => requestAnimationFrame(() => loadChart()) };
+  if (acts[hash]) acts[hash]();
 }
 
 function setMode(m) {
@@ -2051,6 +1913,7 @@ function setMode(m) {
   $('mbtn-swing').classList.toggle('active', m === 'swing');
   $('ss-mode').textContent = m.toUpperCase() + ' trading mode';
   if ($('sig-mode-lbl')) $('sig-mode-lbl').textContent = m === 'day' ? 'Day Trading' : 'Swing Trading';
+  if (S.page === 'signals') renderSignalsPage();
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2164,23 +2027,50 @@ async function pollREST() {
 }
 
 // ── Ticker tape using real prices ────────────────────────────────────────────
+let _tapeSyms = [];
 function updateTape() {
   const syms = Object.keys(S.prices).slice(0, 25);
   if (!syms.length) return;
-  const half = syms.map(sym => {
+
+  const tc = $('tape-container');
+  const symKey = syms.join(',');
+
+  // Only rebuild DOM if symbol list changed — avoids animation reset
+  if (symKey !== _tapeSyms) {
+    _tapeSyms = symKey;
+    const half = syms.map(sym => {
+      const p = S.prices[sym];
+      if (!p || !p.price) return '';
+      const chg = p.change_pct || 0;
+      const cls = chg > 0 ? 'u' : chg < 0 ? 'd' : 'n';
+      const arrow = chg > 0 ? '▲' : chg < 0 ? '▼' : '—';
+      const decimals = sym.includes('=X') || p.price < 10 ? 4 : 2;
+      return `<span class="tick" data-sym="${sym}">
+        <span class="t-sym">${sym.replace('=X','')}</span>
+        <span class="t-p">${p.price.toFixed(decimals)}</span>
+        <span class="t-c ${cls}">${arrow}${Math.abs(chg).toFixed(2)}%</span>
+      </span>`;
+    }).join('');
+    tc.innerHTML = `<div class="tape">${half + half}</div>`;
+    return;
+  }
+
+  // Symbols unchanged — update price text in-place (no animation reset)
+  syms.forEach(sym => {
     const p = S.prices[sym];
-    if (!p || !p.price) return '';
+    if (!p || !p.price) return;
     const chg = p.change_pct || 0;
     const cls = chg > 0 ? 'u' : chg < 0 ? 'd' : 'n';
     const arrow = chg > 0 ? '▲' : chg < 0 ? '▼' : '—';
-    return `<span class="tick">
-      <span class="t-sym">${sym.replace('=X','')}</span>
-      <span class="t-p">${p.price.toFixed(sym.includes('=X') || p.price < 10 ? 4 : 2)}</span>
-      <span class="t-c ${cls}">${arrow}${Math.abs(chg).toFixed(2)}%</span>
-    </span>`;
-  }).join('');
-  const full = half + half;  // duplicate for seamless loop
-  $('tape-container').innerHTML = `<div class="tape">${full}</div>`;
+    const decimals = sym.includes('=X') || p.price < 10 ? 4 : 2;
+    // Update all instances (tape is doubled, so 2 per symbol)
+    tc.querySelectorAll(`[data-sym="${sym}"]`).forEach(el => {
+      el.querySelector('.t-p').textContent = p.price.toFixed(decimals);
+      const tc2 = el.querySelector('.t-c');
+      tc2.textContent = `${arrow}${Math.abs(chg).toFixed(2)}%`;
+      tc2.className = `t-c ${cls}`;
+    });
+  });
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -2360,17 +2250,17 @@ function updateEquityChart() {
 //  SIGNALS PAGE
 // ══════════════════════════════════════════════════════════════════════════
 async function renderSignalsPage() {
-  const sigs = await apiFetch(`/api/signals?mode=${S.mode}&limit=20`).catch(() => S.signals);
-  if (sigs) S.signals = sigs;
+  const sigs = await apiFetch(`/api/signals?mode=${S.mode}&limit=20`).catch(() => []);
+  const displaySigs = (sigs && sigs.length) ? sigs : [];
 
-  $('sig-all').innerHTML = S.signals.length
-    ? S.signals.map(sigCard).join('')
+  $('sig-all').innerHTML = displaySigs.length
+    ? displaySigs.map(sigCard).join('')
     : `<div style="color:var(--t3);font-family:var(--font-body);font-size:11px;padding:12px">No signals yet — strategy engine is running on cached candle data. Check System tab for status.</div>`;
-  $('sig-all-count').textContent = S.signals.filter(s=>s.is_actionable).length + ' actionable';
+  $('sig-all-count').textContent = displaySigs.filter(s=>s.is_actionable).length + ' actionable';
 
   // Ensemble bar chart
-  if (S.signals.length) {
-    const topSigs = S.signals.slice(0,10);
+  if (displaySigs.length) {
+    const topSigs = displaySigs.slice(0,10);
     const cols = topSigs.map(s => {
       const dir = (s.direction||s.signal||'').toUpperCase();
       return dir==='LONG' ? 'rgba(0,255,200,0.7)' : dir==='SHORT' ? 'rgba(255,51,102,0.7)' : 'rgba(74,106,138,0.4)';
@@ -2391,7 +2281,7 @@ async function renderSignalsPage() {
 
     // Strategy distribution
     const stratCounts = {};
-    S.signals.forEach(s => { const k = s.strategy||'unknown'; stratCounts[k]=(stratCounts[k]||0)+1; });
+    displaySigs.forEach(s => { const k = s.strategy||'unknown'; stratCounts[k]=(stratCounts[k]||0)+1; });
     const strats = Object.entries(stratCounts).sort((a,b)=>b[1]-a[1]).slice(0,6);
     destroyChart('stratBar');
     S.charts.stratBar = new Chart($('strat-bar').getContext('2d'), {
@@ -2409,7 +2299,6 @@ async function refreshSignals() {
   try {
     const r = await apiFetch(`/api/signals/refresh?mode=${S.mode}`, { method:'POST' });
     log('sig', `Signal refresh: ${r.generated} signals generated`);
-    S.signals = await apiFetch(`/api/signals?mode=${S.mode}&limit=20`);
     renderSignalsPage();
   } catch(e) { log('error', `Signal refresh failed: ${e.message}`); }
 }
@@ -2720,7 +2609,7 @@ function destroyChart(key) {
 //  INITIALISATION
 // ══════════════════════════════════════════════════════════════════════════
 async function init() {
-  log('info', 'AlphaGrid v3 initialising — connecting to API…');
+  log('info', 'AlphaGrid v7 initialising — connecting to API…');
   connectWS();
 
   // Initial REST load (covers case where WS takes time)
@@ -2732,6 +2621,8 @@ async function init() {
 
   // Every 30s update equity chart even if on overview
   setInterval(updateEquityChart, 30000);
+
+  restorePageFromHash();
 }
 
 // Check for stale WS — if no tick in 15s, log warning
@@ -3611,300 +3502,6 @@ async function runAllEvals() {
 // ── Patch tab switcher to include new pages ───────────────────────────────────
 const _baseSW = sw;
 
-
-// ════════════════════════════════════════════════════════════════
-//  HISTORY PAGE — 10-Year Real Data
-// ════════════════════════════════════════════════════════════════
-
-let _histSym      = 'AAPL';
-let _histInterval = '1d';
-let _histChart    = null;
-let _histData     = [];
-let _allHistSyms  = [];
-
-const INTERVAL_LIMITS = {
-  '1d':'Daily (10yr)','1h':'1 Hour (2yr)','15m':'15 Min (60d)','5m':'5 Min (60d)','1m':'1 Min (7d)'
-};
-
-async function renderHistoryPage() {
-  // Set default to-date
-  if (!$('hist-to').value) {
-    $('hist-to').value = new Date().toISOString().slice(0,10);
-  }
-
-  // Load status
-  const status = await apiFetch('/api/history/status').catch(() => null);
-  if (status) {
-    $('hist-total-bars').textContent = (status.total_bars||0).toLocaleString();
-    $('hist-syms-cached').textContent = status.symbols_cached || 0;
-    const dbStatus = $('hist-db-status');
-    if (status.is_downloading) {
-      dbStatus.textContent = 'Downloading…';
-      dbStatus.className = 'hist-stat-val y';
-    } else if (status.total_bars > 0) {
-      dbStatus.textContent = 'Ready';
-      dbStatus.className = 'hist-stat-val g';
-    } else {
-      dbStatus.textContent = 'Empty';
-      dbStatus.className = 'hist-stat-val r';
-    }
-    // Progress list
-    const prog = status.detail || [];
-    $('hist-prog-badge').textContent = prog.length + ' symbols';
-    $('hist-progress-list').innerHTML = prog.slice(0,30).map(p => {
-      const maxBars = {'1d':2520,'1h':5040,'15m':960,'5m':480,'1m':140}[p.interval] || 2520;
-      const pct = Math.min((p.bars||0) / maxBars * 100, 100);
-      const col = p.status==='error' ? 'var(--red)' : pct>80 ? 'var(--green)' : 'var(--amber)';
-      return `<div class="hist-progress-row">
-        <span class="hist-prog-sym">${p.symbol||'—'}</span>
-        <span style="font-family:var(--font-mono);font-size:9px;color:var(--t3);width:30px">${p.interval||''}</span>
-        <div class="hist-prog-bar"><div class="hist-prog-fill" style="width:${pct}%;background:${col}"></div></div>
-        <span class="hist-prog-val">${(p.bars||0).toLocaleString()} bars</span>
-        <span style="font-size:9px;font-family:var(--font-body);color:${p.status==='error'?'var(--red)':'var(--t3)'};">${p.action||p.status||''}</span>
-      </div>`;
-    }).join('') || '<div style="padding:12px;color:var(--t3);font-family:var(--font-body);font-size:11px">No download activity yet. Click "Download All" to start.</div>';
-  }
-
-  // Build symbol grid
-  _allHistSyms = (S.universe || []).map(u => u.symbol).filter(Boolean);
-  if (!_allHistSyms.length) {
-    // Fall back to hardcoded list
-    _allHistSyms = ['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA','AMD','JPM',
-      'BAC','V','MA','SPY','QQQ','GLD','TLT','COIN','CRWD','PLTR','NET',
-      'EURUSD=X','GBPUSD=X','USDJPY=X','AUDUSD=X','XAUUSD=X'];
-  }
-  $('hist-sym-count').textContent = _allHistSyms.length + ' symbols';
-  renderHistSymGrid(_allHistSyms);
-}
-
-function renderHistSymGrid(syms) {
-  $('hist-sym-grid').innerHTML = syms.slice(0,200).map(s =>
-    `<div class="hist-sym-btn ${s===_histSym?'active':''}" onclick="selectHistSym('${s}')">${s.replace('=X','')}</div>`
-  ).join('');
-}
-
-function filterHistSymbols(query) {
-  const q = query.trim().toUpperCase();
-  const filtered = q ? _allHistSyms.filter(s => s.includes(q)) : _allHistSyms;
-  renderHistSymGrid(filtered);
-}
-
-function selectHistSym(sym) {
-  _histSym = sym;
-  document.querySelectorAll('.hist-sym-btn').forEach(b => {
-    b.classList.toggle('active', b.textContent === sym.replace('=X','') || b.textContent === sym);
-  });
-  loadHistStats(sym);
-}
-
-function setHistInterval(iv) {
-  _histInterval = iv;
-  document.querySelectorAll('.hist-interval-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.iv === iv);
-  });
-  // Adjust from date based on interval limits
-  const limitDays = {'1d':3650,'1h':730,'15m':60,'5m':60,'1m':7}[iv] || 3650;
-  const minDate = new Date(Date.now() - limitDays*86400000).toISOString().slice(0,10);
-  const currentFrom = $('hist-from').value;
-  if (!currentFrom || currentFrom < minDate) {
-    $('hist-from').value = minDate;
-  }
-}
-
-async function loadHistStats(sym) {
-  const stats = await apiFetch(`/api/history/${sym}/stats`).catch(() => null);
-  if (!stats || !stats.intervals) {
-    $('hist-sym-stats-panel').style.display = 'none';
-    return;
-  }
-  $('hist-sym-stats-panel').style.display = 'block';
-  $('hist-sym-stats-title').textContent = sym + ' — Cached Data';
-  const ivs = Object.entries(stats.intervals);
-  $('hist-sym-stats').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
-      ${ivs.map(([iv,d]) => `
-        <div style="padding:10px 12px;background:var(--d2);border:1px solid rgba(255,255,255,.06);border-radius:4px">
-          <div style="font-size:8px;font-family:var(--font-body);font-weight:500;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">${d.interval_name||iv}</div>
-          <div style="font-family:var(--font-head);font-size:16px;font-weight:700;color:var(--green)">${(d.n_bars||0).toLocaleString()}</div>
-          <div style="font-size:9px;font-family:var(--font-mono);color:var(--t3);margin-top:3px">${d.from ? d.from.slice(0,10) : '—'} → ${d.to ? d.to.slice(0,10) : '—'}</div>
-          ${d.years_coverage ? `<div style="font-size:9px;font-family:var(--font-body);color:var(--blue);margin-top:2px">${d.years_coverage} years</div>` : ''}
-        </div>
-      `).join('')}
-    </div>
-    <div style="margin-top:8px;display:flex;gap:8px">
-      <button onclick="triggerSymbolDownload('${sym}')" style="font-family:var(--font-body);font-size:10px;font-weight:500;padding:6px 12px;border:1px solid rgba(0,180,255,.3);background:rgba(0,180,255,.07);color:var(--blue);border-radius:3px;cursor:pointer">
-        ↓ Re-download ${sym}
-      </button>
-    </div>
-  `;
-}
-
-async function loadHistData() {
-  if (!_histSym) return;
-  const from = $('hist-from').value;
-  const to   = $('hist-to').value || new Date().toISOString().slice(0,10);
-  const iv   = _histInterval;
-
-  $('hist-chart-title').textContent = `${_histSym} — ${INTERVAL_LIMITS[iv]||iv}`;
-  $('hist-chart-badge').textContent = 'Loading…';
-  $('hist-data-tb').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--t3);font-family:var(--font-body)">
-    <div style="display:inline-block;width:14px;height:14px;border:2px solid rgba(0,255,200,.3);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle"></div>
-    Loading ${_histSym} ${iv} data…</td></tr>`;
-
-  try {
-    let url = `/api/history/${_histSym}?interval=${iv}&format=records`;
-    if (from) url += `&from_dt=${from}`;
-    if (to)   url += `&to_dt=${to}`;
-
-    const r = await apiFetch(url);
-    if (r.error) throw new Error(r.error);
-
-    _histData = r.data || [];
-    $('hist-chart-badge').textContent = `${_histData.length.toLocaleString()} bars | ${r.from||'—'} → ${r.to||'—'}`;
-    $('hist-export-btn').style.display = _histData.length ? 'block' : 'none';
-
-    if (!_histData.length) {
-      $('hist-no-data').style.display = 'block';
-      $('hist-chart').style.display = 'none';
-      $('hist-data-tb').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--amber);font-family:var(--font-body)">
-        No data found for ${_histSym}/${iv} in selected date range.<br>
-        <small style="color:var(--t3)">Try clicking "↓ Re-download" above or "Download All"</small></td></tr>`;
-      return;
-    }
-
-    $('hist-no-data').style.display = 'none';
-    $('hist-chart').style.display = 'block';
-
-    // Render chart
-    renderHistChart(_histData, _histSym, iv);
-
-    // Render table (last 100 rows)
-    renderHistTable(_histData.slice(-100).reverse());
-
-    log('info', `History loaded: ${_histSym}/${iv} — ${_histData.length.toLocaleString()} bars (${r.from} → ${r.to})`);
-  } catch(e) {
-    $('hist-chart-badge').textContent = 'Error';
-    $('hist-data-tb').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--red);font-family:var(--font-body)">${e.message}</td></tr>`;
-    log('error', `History load failed: ${e.message}`);
-  }
-}
-
-function renderHistChart(data, sym, iv) {
-  const el = $('hist-chart');
-  el.innerHTML = '';
-  if (_histChart) { try { _histChart.remove(); } catch(e){} }
-
-  if (typeof LightweightCharts === 'undefined') {
-    // Chart.js fallback
-    el.innerHTML = '<canvas id="hist-cjs" style="height:340px"></canvas>';
-    const ctx = $('hist-cjs').getContext('2d');
-    const g = ctx.createLinearGradient(0,0,0,340);
-    g.addColorStop(0,'rgba(0,255,200,0.18)'); g.addColorStop(1,'rgba(0,255,200,0)');
-    destroyChart('histCjs');
-    S.charts.histCjs = new Chart(ctx, {
-      type:'line',
-      data:{ datasets:[{
-        data: data.map(d=>({x:d.time*1000, y:d.close})),
-        borderColor:'#00ffc8', borderWidth:1.5, fill:true,
-        backgroundColor:g, pointRadius:0, tension:.2
-      }]},
-      options:{...CO, scales:{
-        x:{type:'time',time:{unit:iv==='1d'?'month':'day'},grid:{color:'rgba(0,255,200,.04)'}},
-        y:{grid:{color:'rgba(0,255,200,.04)'}}
-      }}
-    });
-    return;
-  }
-
-  _histChart = LightweightCharts.createChart(el, {
-    height: 340,
-    layout:{ background:{color:'transparent'}, textColor:'#8da3bf' },
-    grid:{ vertLines:{color:'rgba(0,255,200,.04)'}, horzLines:{color:'rgba(0,255,200,.04)'} },
-    crosshair:{ mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale:{ borderColor:'rgba(0,255,200,.12)' },
-    timeScale:{ borderColor:'rgba(0,255,200,.12)', timeVisible:true },
-    handleScroll:true, handleScale:true,
-  });
-
-  // Candlestick for daily, line for intraday
-  if (iv === '1d' || iv === '1wk' || iv === '1mo') {
-    const cs = _histChart.addCandlestickSeries({
-      upColor:'#00ffc8', downColor:'#ff3366',
-      borderUpColor:'#00ffc8', borderDownColor:'#ff3366',
-      wickUpColor:'#00ffc8', wickDownColor:'#ff3366',
-    });
-    cs.setData(data);
-    // Volume
-    const vs = _histChart.addHistogramSeries({
-      priceFormat:{type:'volume'}, priceScaleId:'vol',
-      scaleMargins:{top:0.85, bottom:0},
-    });
-    vs.setData(data.map(d=>({
-      time:d.time, value:d.volume,
-      color: d.close>=d.open ? 'rgba(0,255,200,0.35)' : 'rgba(255,51,102,0.35)'
-    })));
-  } else {
-    // Line chart for intraday
-    const ls = _histChart.addLineSeries({
-      color:'#00b4ff', lineWidth:1.5, priceLineVisible:false
-    });
-    ls.setData(data.map(d=>({time:d.time, value:d.close})));
-  }
-
-  _histChart.timeScale().fitContent();
-}
-
-function renderHistTable(data) {
-  $('hist-table-count').textContent = data.length.toLocaleString() + ' rows (latest)';
-  $('hist-data-tb').innerHTML = data.map(d => {
-    const chg = d.open > 0 ? ((d.close - d.open)/d.open*100) : 0;
-    const cc  = chg >= 0 ? 'var(--green)' : 'var(--red)';
-    const dt  = new Date(d.time*1000).toISOString().slice(0,10);
-    return `<tr>
-      <td style="color:var(--t3)">${dt}</td>
-      <td>${d.open?.toFixed(4)||'—'}</td>
-      <td style="color:var(--green)">${d.high?.toFixed(4)||'—'}</td>
-      <td style="color:var(--red)">${d.low?.toFixed(4)||'—'}</td>
-      <td style="font-weight:600">${d.close?.toFixed(4)||'—'}</td>
-      <td style="color:var(--t3)">${d.volume?.toLocaleString()||'—'}</td>
-      <td style="color:${cc}">${chg>=0?'+':''}${chg.toFixed(2)}%</td>
-    </tr>`;
-  }).join('');
-}
-
-function exportHistCSV() {
-  if (!_histData.length) return;
-  const rows = ['date,open,high,low,close,volume'];
-  _histData.forEach(d => {
-    const dt = new Date(d.time*1000).toISOString().slice(0,10);
-    rows.push(`${dt},${d.open},${d.high},${d.low},${d.close},${d.volume}`);
-  });
-  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = `${_histSym}_${_histInterval}_${$('hist-from').value}_${$('hist-to').value}.csv`;
-  a.click();
-  log('info', `Exported ${_histData.length} rows as CSV: ${a.download}`);
-}
-
-async function triggerFullDownload() {
-  if (!confirm('Download 10-year daily history for all symbols? This will take several minutes and runs in the background.')) return;
-  try {
-    const r = await apiFetch('/api/history/download-all?intervals=1d', {method:'POST'});
-    showBanner(`Download started: ${r.symbols} symbols. Check progress below.`, 'ok');
-    log('info', `Full history download triggered: ${r.symbols} symbols`);
-    setTimeout(renderHistoryPage, 3000);
-  } catch(e) { log('error', `Download trigger failed: ${e.message}`); }
-}
-
-async function triggerSymbolDownload(sym) {
-  try {
-    const r = await apiFetch(`/api/history/${sym}/download?interval=1d&force=true`, {method:'POST'});
-    showBanner(`Download started for ${sym}`, 'ok');
-    log('info', `Download triggered: ${sym}/1d`);
-    setTimeout(() => loadHistStats(sym), 5000);
-  } catch(e) { log('error', `Download trigger failed for ${sym}: ${e.message}`); }
-}
 
 
 

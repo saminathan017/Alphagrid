@@ -16,7 +16,7 @@ STEP 1 — One-time AWS setup (do this from your Mac)
     aws s3 mb s3://alphagrid-models-YOUR-NAME --region us-east-1
 
 1c. Push your code to GitHub:
-    cd /Users/saminathanadaikkappan/Documents/alphagrid-final
+    cd /path/to/alphagrid
     git init
     git add .
     git commit -m "alphagrid v6"
@@ -154,6 +154,6 @@ AFTER TRAINING — RUN THE DASHBOARD
 
 Once models are downloaded to your Mac:
 
-    cd /Users/saminathanadaikkappan/Documents/alphagrid-final
+    cd /path/to/alphagrid
     venv/bin/uvicorn dashboard.app:app --host 0.0.0.0 --port 8080 --reload
     open http://localhost:8080/dashboard

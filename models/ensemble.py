@@ -1,5 +1,5 @@
 """
-models/ensemble.py  —  AlphaGrid v6
+models/ensemble.py  —  AlphaGrid v7
 =====================================
 Adaptive Ensemble with Confidence Filtering.
 

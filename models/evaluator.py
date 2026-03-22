@@ -1,5 +1,5 @@
 """
-models/evaluator.py  —  AlphaGrid v6 Hedge Fund Edition
+models/evaluator.py  —  AlphaGrid v7 Hedge Fund Edition
 =========================================================
 Institutional Model Evaluation Engine.
 

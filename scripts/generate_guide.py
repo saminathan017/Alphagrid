@@ -12,7 +12,7 @@ class PDF(FPDF):
         self.set_y(-15)
         self.set_font("Helvetica", "I", 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f"AlphaGrid v6  -  Learning Guide   |   Page {self.page_no()}", align="C")
+        self.cell(0, 10, f"AlphaGrid v7  -  Learning Guide   |   Page {self.page_no()}", align="C")
 
     def chapter_title(self, text):
         self.set_font("Helvetica", "B", 18)
@@ -84,7 +84,7 @@ pdf.add_page()
 pdf.set_font("Helvetica", "B", 28)
 pdf.set_text_color(30, 80, 160)
 pdf.ln(20)
-pdf.multi_cell(0, 14, "AlphaGrid v6", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+pdf.multi_cell(0, 14, "AlphaGrid v7", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 pdf.set_font("Helvetica", "", 16)
 pdf.set_text_color(80, 80, 80)
 pdf.multi_cell(0, 10, "Complete Learning Guide", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
@@ -100,7 +100,7 @@ pdf.ln(10)
 pdf.set_font("Helvetica", "", 10.5)
 pdf.set_text_color(60, 60, 60)
 pdf.multi_cell(0, 7,
-    "This guide covers AlphaGrid v6  -  a production-grade ML trading system  -  "
+    "This guide covers AlphaGrid v7  -  a production-grade ML trading system  -  "
     "in two parts. Part 1 explains the project from scratch in plain language. "
     "Part 2 prepares you to discuss it confidently in any technical interview.",
     align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)

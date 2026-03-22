@@ -1,5 +1,5 @@
 """
-models/alpha_engine.py  —  AlphaGrid v6 Hedge Fund Edition
+models/alpha_engine.py  —  AlphaGrid v7 Hedge Fund Edition
 ============================================================
 Institutional Alpha Factor Library.
 

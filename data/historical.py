@@ -1,5 +1,5 @@
 """
-data/historical.py  —  AlphaGrid v6
+data/historical.py  —  AlphaGrid v7
 =====================================
 Historical Data Engine — 10 years of real OHLCV data.
 

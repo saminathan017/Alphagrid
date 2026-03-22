@@ -1,15 +1,23 @@
-AlphaGrid v6 — ML-Powered Trading Intelligence
+AlphaGrid v7 — ML-Powered Trading Intelligence
 ════════════════════════════════════════════════════════════════════════════════
 
-A production-grade quantitative trading system that combines deep learning, gradient boosting, and institutional signal filtering to generate high-confidence trading signals across 200 assets.
+A production-grade quantitative trading system that combines deep learning, gradient
+boosting, and institutional signal filtering to generate high-confidence trading
+signals across 200 assets.
 
-Built to mirror how a real quant fund operates — from raw market data all the way to position sizing — with no mock data, no hardcoded signals, and no shortcuts.
+Built to mirror how a real quant fund operates — from raw market data all the way
+to position sizing — with no mock data, no hardcoded signals, and no shortcuts.
+
+438 trained model files ship with the repository: 146 symbols × 3 models each
+(QuantLSTM + LightGBM DART + MetaLearner). The dashboard runs live on day one.
 
 
 What It Does
 ════════════
 
-AlphaGrid ingests live market data, computes 80+ quantitative features, trains an ensemble of three ML models per symbol, filters every signal through a 7-gate institutional risk desk, and serves everything through a real-time web dashboard.
+AlphaGrid ingests live market data, computes 80+ quantitative features, runs an
+ensemble of three ML models per symbol, filters every signal through a 7-gate
+institutional risk desk, and serves everything through a real-time web dashboard.
 
     yfinance (free, no API key required)
             |
@@ -23,7 +31,7 @@ AlphaGrid ingests live market data, computes 80+ quantitative features, trains a
       +- LightGBM DART        (regime-conditional: separate model per volatility regime)
             |
             v
-    MetaLearner  ->  AUC-weighted stacking
+    MetaLearner  ->  AUC-weighted stacking with degeneracy detection
             |
             v
     7-Gate Signal Filter  ->  confidence, regime, alpha, risk/reward, freshness, portfolio, liquidity
@@ -32,10 +40,11 @@ AlphaGrid ingests live market data, computes 80+ quantitative features, trains a
     FastAPI Dashboard  ->  live prices, signals, paper trading, WebSocket push
 
 
-Results (150-Symbol Training Run, 2-Year Daily Data)
-═════════════════════════════════════════════════════
+Results (146-Symbol Training Run, 10-Year Daily Data)
+══════════════════════════════════════════════════════
 
-Each model is trained and evaluated independently per symbol. The test set is the last 15% of data — held out completely and never touched during training or validation.
+Each model is trained and evaluated independently per symbol. The test set is the
+last 15% of data — held out completely and never touched during training or validation.
 
     Symbol      Best Model       Accuracy    Hit@70    Hit@80    Hit@90    Tier
     --------------------------------------------------------------------------
@@ -48,9 +57,11 @@ Each model is trained and evaluated independently per symbol. The test set is th
     HIMS        QuantLSTM         72.7%      72.7%     72.7%     72.7%     S
     CRWD        QuantLSTM         71.2%      71.2%     71.2%     71.2%     S
 
-Hit@70 means accuracy computed only on predictions where the model's confidence is 70% or higher. A model that is right 90% of the time when it's confident is far more useful than one that is right 55% of the time on every prediction.
+Hit@70 means accuracy computed only on predictions where the model's confidence is
+70% or higher. A model that is right 90% of the time when it's confident is far
+more useful than one that is right 55% of the time on every prediction.
 
-Overall metrics across 139 symbols:
+Overall metrics across 146 symbols:
 
     Model           Avg Accuracy    Avg AUC    Avg MCC    Tier S    Tier A
     -----------------------------------------------------------------------
@@ -67,13 +78,18 @@ Architecture
 
 QuantLSTM  (models/lstm_model.py)
 
-A custom deep learning architecture built specifically for financial time-series. It combines a TCN front-end for multi-scale pattern detection with a BiLSTM for sequential memory and multi-head attention for focusing on the most informative timesteps.
+A custom deep learning architecture built specifically for financial time-series.
+It combines a TCN front-end for multi-scale pattern detection with a BiLSTM for
+sequential memory and multi-head attention for focusing on the most informative
+timesteps.
 
   - TCN front-end: 4 dilated causal convolution blocks, receptive field around 30 bars
   - 3-layer BiLSTM: 512 hidden units with MPS-safe explicit dropout
   - Multi-head attention: 4 heads with temporal attention pooling
-  - Regularization: Mixup augmentation, Stochastic Weight Averaging, 8-pass test-time augmentation, label smoothing combined with focal loss
-  - Training: AdamW optimizer, cosine LR schedule with warmup, early stopping on val loss, Apple Silicon MPS support
+  - Regularization: Mixup augmentation, Stochastic Weight Averaging, 8-pass
+    test-time augmentation, label smoothing combined with focal loss
+  - Training: AdamW optimizer, cosine LR schedule with warmup, early stopping
+    on val loss, Apple Silicon MPS and NVIDIA CUDA support
 
 
 FinancialTransformer  (models/transformer_model.py)
@@ -86,23 +102,32 @@ FinancialTransformer  (models/transformer_model.py)
 
 LightGBM DART  (models/lgbm_model.py)
 
-  - Regime-conditional: trains three separate models for low, medium, and high volatility regimes
-  - DART boosting (Dropout meets Multiple Additive Regression Trees) for stronger regularization
-  - Monotone constraints that encode economic priors, for example higher ADX implies stronger trend signal
-  - At inference, routes each prediction to the model that matches the current volatility regime
+  - Regime-conditional: trains three separate models for low, medium, and high
+    volatility regimes
+  - DART boosting (Dropout meets Multiple Additive Regression Trees) for
+    stronger regularization
+  - Monotone constraints that encode economic priors, for example higher ADX
+    implies stronger trend signal
+  - At inference, routes each prediction to the model that matches the current
+    volatility regime
 
 
 MetaLearner  (models/lgbm_model.py)
 
-  - Stacked generalization: a LightGBM meta-model trained on the out-of-fold predictions of the three base models
-  - For small datasets under 100 samples: falls back to AUC-weighted averaging to avoid overfitting
-  - Degeneracy detection: if LSTM output standard deviation drops below 0.05, it is replaced with 0.5 in the ensemble to prevent one-class collapse from corrupting the final signal
+  - Stacked generalization: a LightGBM meta-model trained on the out-of-fold
+    predictions of the three base models
+  - For small datasets under 100 samples: falls back to AUC-weighted averaging
+    to avoid overfitting
+  - Degeneracy detection: if LSTM output standard deviation drops below 0.05,
+    it is replaced with 0.5 in the ensemble to prevent one-class collapse from
+    corrupting the final signal
 
 
 Feature Engineering  (data/feature_engineer.py)
 ════════════════════════════════════════════════
 
-80+ features across 10 families, all stationary and winsorized at the 1st and 99th percentile.
+80+ features across 10 families, all stationary and winsorized at the 1st and
+99th percentile.
 
     Family                    Features
     ------------------------------------------------------------------------------------
@@ -117,13 +142,17 @@ Feature Engineering  (data/feature_engineer.py)
     Fractal and entropy       Hurst exponent, approximate entropy, run entropy
     Labels                    Triple-barrier (2.5x ATR take-profit, 2.0x ATR stop-loss)
 
-Labels are generated using the triple-barrier method from Lopez de Prado's Advances in Financial ML. Only around 50% of bars produce a clean label, but those labels correspond to real measurable moves rather than noise. This is what pushes accuracy from a naive 52% baseline up to 65-90% on labeled samples.
+Labels are generated using the triple-barrier method from Lopez de Prado's Advances
+in Financial ML. Only around 50% of bars produce a clean label, but those labels
+correspond to real measurable moves rather than noise. This is what pushes accuracy
+from a naive 52% baseline up to 65-90% on labeled samples.
 
 
 7-Gate Signal Filter  (models/signal_filter.py)
 ════════════════════════════════════════════════
 
-Every signal must pass all 7 gates before it reaches the dashboard. This is what separates a research prototype from something you would actually trade.
+Every signal must pass all 7 gates before it reaches the dashboard. This is what
+separates a research prototype from something you would actually trade.
 
     Gate    What It Checks
     -------------------------------------------------------------------------------
@@ -135,22 +164,29 @@ Every signal must pass all 7 gates before it reaches the dashboard. This is what
     6       Sector concentration, book correlation, and gross exposure are within limits
     7       Estimated spread <= 10 bps -- do not trade if liquidity cost exceeds edge
 
-Signals that pass all 7 gates receive a conviction score from 0 to 100, a fractional Kelly position size, and a 3-tier take-profit cascade at 1.0x, 2.0x, and 3.5x ATR.
+Signals that pass all 7 gates receive a conviction score from 0 to 100, a fractional
+Kelly position size, and a 3-tier take-profit cascade at 1.0x, 2.0x, and 3.5x ATR.
 
 
 Live Dashboard  (dashboard/app.py)
 ═══════════════════════════════════
 
-A production FastAPI server with 50+ REST endpoints and a WebSocket feed.
+A production FastAPI server with 50+ REST endpoints and a WebSocket feed. Nine
+purpose-built pages, each serving a distinct role in the trading workflow.
 
-  - Live prices across 200 symbols, updated every 5 seconds
-  - Real-time indicators: 40+ Numba-JIT compiled (RSI, MACD, ATR, Bollinger, SuperTrend, VWAP, Ichimoku, ADX, and more)
-  - Signal feed: ML and TA signals with confidence scores, entry, TP, and SL levels
-  - Paper trading: open and close positions at live prices with real P&L tracking
-  - Sector heatmap: live percentage change grouped by sector
-  - Performance metrics: Sharpe, Sortino, Calmar, and win rate computed from actual trade history
+  - Overview:    portfolio P&L, equity curve, sector heatmap, live market summary
+  - Signals:     ML and TA signals with confidence scores, entry, TP, and SL levels
+  - Universe:    live prices across 200 symbols updated every 5 seconds, sortable
+  - Trades:      open and closed positions, real P&L tracking, trade log
+  - Chart:       interactive OHLCV chart with 40+ Numba-JIT compiled indicators
+  - Broker:      paper and live broker connection, order routing, account state
+  - Models:      per-symbol model performance, Tier ratings, calibration curves
+  - Risk:        Kelly sizing, drawdown limits, sector concentration, gross exposure
+  - Eval:        IC, ICIR, signal Sharpe, hit rate by confidence bucket
+
   - WebSocket at /ws: pushes prices, signals, and portfolio state every 2 seconds
-  - Authentication: JWT-based login with role-based access for Admin, Builder, and Trader roles
+  - Authentication: JWT-based login with role-based access for Admin, Builder, Trader
+  - Performance metrics: Sharpe, Sortino, Calmar, and win rate from actual trade history
 
 
 Quick Start
@@ -161,92 +197,158 @@ Quick Start
     cd alphagrid
     pip install -r requirements.txt
 
-    # Start the dashboard (no training needed -- runs TA signals by default)
+    # Start the dashboard
+    # Trained models for 146 symbols are included -- ML signals are live immediately
     uvicorn dashboard.app:app --host 0.0.0.0 --port 8080 --reload
 
     # Open in browser
     open http://localhost:8080/dashboard
 
-    # Train ML models (optional -- adds ensemble signals on top of TA)
-    python scripts/train_models.py                           # all 150 symbols, 10-year data
+    # Retrain or extend to new symbols (optional)
+    python scripts/train_models.py                            # all symbols, 10-year data
     python scripts/train_models.py --symbols AAPL,MSFT,NVDA  # specific symbols only
     python scripts/train_models.py --symbols AAPL --quick    # fast mode, 25 epochs
 
     # Monitor training with a live progress bar
     python scripts/monitor_training.py
 
-No API keys required. All market data comes from yfinance, which is completely free.
+No API keys required. All market data comes from yfinance, which is free.
+
+
+Cloud Training  (scripts/cloud_bootstrap.sh)
+═════════════════════════════════════════════
+
+Training the full 146-symbol universe on a MacBook takes 6-12 hours. The bootstrap
+script provisions an EC2 g4dn.xlarge (NVIDIA T4, 16 GB VRAM) and runs the full
+pipeline for around $0.50-$1.50 total.
+
+    # From your local machine — edit S3_BUCKET and GITHUB_REPO at the top first
+    scp scripts/cloud_bootstrap.sh ec2-user@YOUR_IP:~/
+
+    # On the EC2 instance
+    bash cloud_bootstrap.sh
+
+    # Training runs in a detached screen session
+    screen -r alphagrid          # reattach
+    tail -f logs/cloud_training.log
+
+    # After training completes, sync models back to local
+    aws s3 sync s3://your-bucket/alphagrid/models/ models/
+
+    Instance        GPU              VRAM    Spot/hr   146 symbols   Total cost
+    ──────────────────────────────────────────────────────────────────────────────
+    g4dn.xlarge     NVIDIA T4        16 GB   ~$0.16    ~3-4 hrs      ~$0.50-0.65
+    g4dn.2xlarge    NVIDIA T4        16 GB   ~$0.28    ~2-3 hrs      ~$0.55-0.85
+    g5.xlarge       NVIDIA A10G      24 GB   ~$0.50    ~1.5-2 hrs    ~$0.75-1.00
+
+See CLOUD_SETUP.md for the full step-by-step walkthrough including spot interruption
+recovery and S3 model syncing.
 
 
 Asset Universe
 ══════════════
 
-150 US Equities across all major sectors:
+100 US Equities across all major sectors:
 
-  - Mega-cap tech: AAPL, MSFT, NVDA, GOOGL, META, AMZN, TSLA
-  - Semiconductors: AVGO, AMD, QCOM, ASML, TSM, MU, INTC
-  - Financials: JPM, BAC, GS, MS, V, MA, BLK
-  - Healthcare: LLY, UNH, JNJ, ABBV, TMO
-  - Growth: CRWD, PLTR, SNOW, NET, COIN, SOFI, ZS, SHOP
-  - ETFs: SPY, QQQ, IWM, GLD, TLT, SOXL, TQQQ
+  - Mega-cap tech:   AAPL, MSFT, NVDA, GOOGL, META, AMZN, TSLA
+  - Semiconductors:  AVGO, AMD, QCOM, ASML, TSM, MU, INTC, KLAC, LRCX, MRVL
+  - Financials:      JPM, BAC, GS, MS, V, MA, BLK, SCHW, C, WFC
+  - Healthcare:      LLY, UNH, JNJ, ABBV, TMO, MRK, PFE, AMGN, GILD
+  - Growth:          CRWD, PLTR, SNOW, NET, COIN, SOFI, ZS, SHOP, DDOG
+  - Consumer:        COST, HD, MCD, SBUX, NKE, TGT, WMT, PEP, KO
+  - Energy:          XOM, CVX, COP, EOG, SLB
+  - Industrial:      CAT, HON, LMT, RTX, GE, DE, UPS, FDX
+  - ETFs/Leveraged:  SPY, QQQ, IWM, GLD, TLT, SOXL, SOXS, TQQQ, XLF, XLK
 
-50 Forex Pairs:
+46 Forex Pairs:
 
-  - Majors: EURUSD, GBPUSD, USDJPY, USDCHF, AUDUSD, USDCAD
-  - Minors and crosses: GBPJPY, EURJPY, GBPAUD, and more
-  - Metals: XAUUSD, XAGUSD, XPTUSD, XPDUSD
-  - EM and Exotics: USDTRY, USDBRL, USDZAR, USDINR, USDMXN
+  - Majors:          EURUSD, GBPUSD, USDJPY, USDCHF, AUDUSD, USDCAD, NZDUSD
+  - EUR crosses:     EURGBP, EURJPY, EURAUD, EURCAD, EURCHF, EURNZD
+  - GBP crosses:     GBPJPY, GBPAUD, GBPCAD, GBPCHF
+  - AUD/NZD:         AUDJPY, AUDCAD, AUDCHF, AUDNZD, NZDJPY, NZDCAD, NZDCHF
+  - CAD/CHF:         CADJPY, CADCHF, CHFJPY
+  - EM and Exotics:  USDTRY, USDBRL, USDZAR, USDINR, USDMXN, USDSGD, USDHKD,
+                     USDCZK, USDHUF, USDPLN, USDDKK, USDSEK, USDNOK, USDTHB,
+                     USDILS, NOKJPY, SEKJPY, DKKJPY, ZARJPY
 
 
 Project Structure
 ═════════════════
 
     alphagrid/
-    |- core/          Config, auth, ticker universe, event bus
-    |- data/          Feature engineering, historical data, live feed
-    |- models/        QuantLSTM, Transformer, LightGBM, ensemble, evaluator
-    |- strategies/    Numba-JIT indicators, day and swing trading strategies
-    |- dashboard/     FastAPI server, WebSocket, SPA frontend
-    |- execution/     Broker integration (Alpaca, OANDA, paper trader)
-    |- backtest/      Vectorized backtesting engine and metrics
-    |- risk/          Kelly sizing and portfolio constraints
-    |- scripts/       Training pipeline, backtest runner, live engine
-    +- config/        settings.yaml with 200+ configurable parameters
+    |- core/              Config, auth, ticker universe, event bus, latency cache
+    |- data/              Feature engineering, historical data, live feed, news
+    |- models/            QuantLSTM, Transformer, LightGBM, ensemble, evaluator,
+    |                     alpha engine, signal filter, position sizer, sentiment
+    |- strategies/        40+ Numba-JIT indicators, day and swing trading strategies
+    |- dashboard/         FastAPI server, WebSocket, 9-page SPA frontend
+    |- execution/         Broker integration (Alpaca, OANDA, Robinhood, paper trader)
+    |- backtest/          Vectorized backtesting engine and metrics
+    |- risk/              Kelly sizing and portfolio constraints
+    |- scripts/           Training pipeline, cloud bootstrap, monitor, backtest runner
+    +- config/            settings.yaml with 200+ configurable parameters
+
+    Root files
+    |- Dockerfile         GPU training image (pytorch/pytorch:2.3.0-cuda12.1)
+    |- requirements.txt   Full dependency manifest
+    |- .env.example       Environment template — copy to .env to configure
+    |- SETUP.md           Local setup guide (macOS, Apple Silicon MPS)
+    |- CLOUD_SETUP.md     AWS EC2 cloud training guide
+    |- CHANGELOG.md       Version history
+    +- LICENSE            MIT
 
 
 Tech Stack
 ══════════
 
     Layer         Technologies
-    -------------------------------------------------------
-    Data          yfinance, pandas, numpy, SQLite
-    ML            PyTorch, LightGBM, scikit-learn
+    ─────────────────────────────────────────────────────────
+    Data          yfinance, pandas, numpy, SQLite, SQLAlchemy
+    ML            PyTorch 2.3, LightGBM, scikit-learn, imbalanced-learn
     Indicators    Numba JIT, pandas-ta
-    API           FastAPI, uvicorn, WebSockets
-    Auth          JWT (python-jose), bcrypt
-    Platform      Python 3.11, Apple Silicon MPS, CUDA
+    API           FastAPI, uvicorn, WebSockets, aiohttp
+    Auth          JWT (python-jose), bcrypt (passlib)
+    Platform      Python 3.11, Apple Silicon MPS, NVIDIA CUDA 12.1
+    Container     Docker (pytorch/pytorch:2.3.0-cuda12.1-cudnn8-runtime)
+    Cloud         AWS EC2 g4dn.xlarge, S3 model storage
 
 
 Key Design Decisions
 ════════════════════
 
 Why triple-barrier labels?
-Simple next-bar return labels are noisy. With random market microstructure, 52% accuracy is roughly the ceiling. The triple-barrier method filters to only the bars where a real measurable move occurred, pushing accuracy on labeled samples up to 65-90%.
+Simple next-bar return labels are noisy. With random market microstructure, 52%
+accuracy is roughly the ceiling. The triple-barrier method filters to only the bars
+where a real measurable move occurred, pushing accuracy on labeled samples to 65-90%.
 
 Why regime-conditional LightGBM?
-Strategies that work in low-volatility trending markets tend to fail badly in high-volatility mean-reverting ones. Training three separate models with regime-specific hyperparameters consistently outperforms a single global model.
+Strategies that work in low-volatility trending markets tend to fail badly in
+high-volatility mean-reverting ones. Training three separate models with
+regime-specific hyperparameters consistently outperforms a single global model.
 
 Why MetaLearner stacking?
-Each base model has a different strength. The LSTM captures temporal dependencies, the Transformer catches long-range patterns, and LightGBM excels on tabular snapshot features. The meta-learner learns when to trust each one rather than blending them blindly.
+Each base model has a different strength. The LSTM captures temporal dependencies,
+the Transformer catches long-range patterns, and LightGBM excels on tabular snapshot
+features. The meta-learner learns when to trust each one rather than blending blindly.
 
 Why 7 gates?
-A model that is right 70% of the time is still useless if you trade every single signal it generates. The 7-gate filter selects the roughly 5 to 15% of signals that have genuine edge. Those are the ones that convert to 80-90% accuracy.
+A model that is right 70% of the time is still useless if you trade every signal it
+generates. The 7-gate filter selects the roughly 5 to 15% of signals that have
+genuine edge. Those are the ones that convert to 80-90% accuracy.
+
+Why trained models in the repository?
+Training 146 symbols from scratch takes 6-12 hours on a MacBook. Shipping the
+trained checkpoints means the dashboard runs with real ML signals on first launch
+with no GPU and no waiting. The cloud bootstrap exists for anyone who wants to
+retrain from scratch or extend the universe.
 
 
 Disclaimer
 ══════════
 
-Paper trading only by default. To enable live trading, configure your broker credentials in config/settings.yaml. This is a research and educational project. Past performance does not guarantee future results. Trade at your own risk.
+Paper trading only by default. To enable live trading, configure your broker
+credentials in config/settings.yaml. This is a research and educational project.
+Past performance does not guarantee future results. Trade at your own risk.
 
 
 License

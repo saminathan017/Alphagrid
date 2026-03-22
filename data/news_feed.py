@@ -1,5 +1,5 @@
 """
-data/news_feed.py  —  AlphaGrid v4
+data/news_feed.py  —  AlphaGrid v7
 ====================================
 Real financial news aggregator. Sources (all free, no API key required):
   • Yahoo Finance RSS  — per-ticker + general market

@@ -1,5 +1,5 @@
 """
-models/signal_filter.py  —  AlphaGrid v6 Hedge Fund Edition
+models/signal_filter.py  —  AlphaGrid v7 Hedge Fund Edition
 =============================================================
 Institutional Signal Validation & Secondary Confirmation Layer.
 

@@ -1,5 +1,5 @@
 """
-models/lgbm_model.py  —  AlphaGrid v6
+models/lgbm_model.py  —  AlphaGrid v7
 =======================================
 LightGBM Gradient Boosting for Financial Tabular Data.
 

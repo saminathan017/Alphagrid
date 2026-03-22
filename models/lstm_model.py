@@ -1,5 +1,5 @@
 """
-models/lstm_model.py  —  AlphaGrid v6
+models/lstm_model.py  —  AlphaGrid v7
 =======================================
 Production BiLSTM + Multi-Head Attention + TCN Front-End.
 

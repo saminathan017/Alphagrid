@@ -1,5 +1,5 @@
 """
-strategies/strategy_lab.py  —  AlphaGrid v4
+strategies/strategy_lab.py  —  AlphaGrid v7
 ============================================
 Strategy Lab: parametric strategy runner.
 

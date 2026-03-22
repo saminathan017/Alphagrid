@@ -1,5 +1,5 @@
 """
-dashboard/app.py  —  AlphaGrid v3 Production API
+dashboard/app.py  —  AlphaGrid v7 Production API
 =================================================
 Real FastAPI server. No mock data. Every endpoint pulls live data from:
   • yfinance   — real OHLCV prices, intraday + daily
@@ -74,9 +74,10 @@ app = FastAPI(
     description="Real-time trading intelligence — no mock data",
 )
 
+_cors_origins = [o.strip() for o in os.getenv("ALPHAGRID_CORS_ORIGINS", "*").split(",")]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -141,7 +142,7 @@ class AppState:
     def __init__(self):
         self.prices:   dict[str, dict]        = {}   # symbol → {price, chg, chg_pct, ...}
         self.candles:  dict[str, pd.DataFrame] = {}  # symbol → OHLCV df
-        self.signals:  list[dict]              = []   # latest generated signals
+        self.signals:  dict[str, list[dict]]   = {"day": [], "swing": []}  # mode → signals
         self.trades:   list[dict]              = []   # paper trades log
         self.equity_curve: list[dict]          = []  # daily snapshots
         self.portfolio: dict                   = {
@@ -253,135 +254,89 @@ strategy_engine = StrategyEngine() if STRATEGY_OK else None
 
 BATCH = 10   # symbols per yf.download call (conservative for reliability)
 
+_CACHE_DIR = ROOT / "cache" / "data"
+
+def _load_parquet(symbol: str) -> pd.DataFrame:
+    """Load OHLCV from local parquet cache. Returns empty DataFrame if not found."""
+    sym = symbol.upper()
+    for name in [sym, sym.replace("/", "") + "_X", sym + "=X"]:
+        p = _CACHE_DIR / f"{name}.parquet"
+        if p.exists():
+            try:
+                df = pd.read_parquet(p)
+                # Flatten MultiIndex columns: ('Close', 'AAPL') → 'close'
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = [c[0].lower() for c in df.columns]
+                else:
+                    df.columns = [c.lower() for c in df.columns]
+                needed = ["open", "high", "low", "close", "volume"]
+                if all(c in df.columns for c in needed):
+                    df = df[needed].dropna()
+                    df.index = pd.to_datetime(df.index, utc=True)
+                    return df
+            except Exception as e:
+                logger.debug(f"Parquet load fail {sym}: {e}")
+    return pd.DataFrame()
+
+
 def _yf_batch_prices(symbols: list[str]) -> dict[str, dict]:
     """
-    Fetch latest close + day change for a batch of symbols via yfinance.
-    Uses yf.download (2-day daily) — works reliably without fast_info attribute issues.
-    Returns {symbol: {price, prev_close, change, change_pct, volume, high, low, open}}
+    Read latest close + day change from local parquet cache (no yfinance calls).
     """
-    if not YF_OK or not symbols:
-        return {}
     result = {}
-    try:
-        syms_str = " ".join(symbols)
-        df = yf.download(syms_str, period="2d", interval="1d",
-                         progress=False, auto_adjust=True, threads=False)
-        if df.empty:
-            return {}
-
-        # yfinance returns MultiIndex columns when >1 symbol, flat when =1
-        multi = len(symbols) > 1
-
-        def _col(field, sym):
-            if multi:
-                try:
-                    return df[field][sym].dropna()
-                except (KeyError, TypeError):
-                    return pd.Series(dtype=float)
-            else:
-                return df[field].dropna() if field in df.columns else pd.Series(dtype=float)
-
-        ts = datetime.utcnow().isoformat()
-        for sym in symbols:
-            try:
-                close  = _col("Close",  sym)
-                high   = _col("High",   sym)
-                low    = _col("Low",    sym)
-                open_  = _col("Open",   sym)
-                volume = _col("Volume", sym)
-                if len(close) < 1:
-                    continue
-                price      = float(close.iloc[-1])
-                prev_close = float(close.iloc[-2]) if len(close) >= 2 else price
-                if price <= 0:
-                    continue
-                chg     = price - prev_close
-                chg_pct = (chg / prev_close * 100) if prev_close else 0.0
-                result[sym] = {
-                    "symbol":     sym,
-                    "price":      round(price, 4),
-                    "prev_close": round(prev_close, 4),
-                    "change":     round(chg, 4),
-                    "change_pct": round(chg_pct, 3),
-                    "volume":     int(volume.iloc[-1]) if len(volume) >= 1 else 0,
-                    "high":       round(float(high.iloc[-1]),  4) if len(high)  >= 1 else price,
-                    "low":        round(float(low.iloc[-1]),   4) if len(low)   >= 1 else price,
-                    "open":       round(float(open_.iloc[-1]), 4) if len(open_) >= 1 else price,
-                    "timestamp":  ts,
-                }
-            except Exception as e:
-                logger.debug(f"Price parse fail {sym}: {e}")
-    except Exception as e:
-        logger.warning(f"Batch price fail {symbols}: {e}")
+    ts = datetime.utcnow().isoformat()
+    for sym in symbols:
+        try:
+            df = _load_parquet(sym)
+            if df.empty or len(df) < 2:
+                continue
+            price      = float(df["close"].iloc[-1])
+            prev_close = float(df["close"].iloc[-2])
+            if price <= 0:
+                continue
+            chg     = price - prev_close
+            chg_pct = (chg / prev_close * 100) if prev_close else 0.0
+            result[sym] = {
+                "symbol":     sym,
+                "price":      round(price, 4),
+                "prev_close": round(prev_close, 4),
+                "change":     round(chg, 4),
+                "change_pct": round(chg_pct, 3),
+                "volume":     int(df["volume"].iloc[-1]),
+                "high":       round(float(df["high"].iloc[-1]), 4),
+                "low":        round(float(df["low"].iloc[-1]),  4),
+                "open":       round(float(df["open"].iloc[-1]), 4),
+                "timestamp":  ts,
+            }
+        except Exception as e:
+            logger.debug(f"Price parse fail {sym}: {e}")
     return result
 
 
 def _yf_history(
     symbol:   str,
-    period:   str = "10y",   # default now 10 years
+    period:   str = "10y",
     interval: str = "1d",
     start:    Optional[str] = None,
     end:      Optional[str] = None,
 ) -> pd.DataFrame:
-    """
-    Fetch OHLCV history for one symbol.
-    Routes through HistoricalDataManager (SQLite cache) when available.
-    Falls back to direct yfinance download otherwise.
-    """
-    sym = symbol.upper()
-
-    # ── Route through history manager (SQLite cache) ──────────────────────────
-    if HIST_OK and history_manager:
-        try:
-            df = history_manager.get_ohlcv(
-                symbol   = sym,
-                interval = interval,
-                from_dt  = start,
-                to_dt    = end,
-            )
-            if not df.empty:
-                return df
-        except Exception as e:
-            logger.debug(f"History manager fail {sym}: {e}")
-
-    # ── Direct yfinance fallback ──────────────────────────────────────────────
-    if not YF_OK:
-        return pd.DataFrame()
-    try:
-        if start and end:
-            df = yf.download(
-                sym, start=start, end=end, interval=interval,
-                auto_adjust=True, progress=False, threads=False,
-            )
-        else:
-            # Map period string to start date for explicit date range
-            period_map = {
-                "1mo":  30,  "3mo":  90,  "6mo":  180, "1y":   365,
-                "2y":   730, "5y":  1825, "10y": 3650, "max": 3650,
-                "ytd":  (datetime.utcnow() - datetime(datetime.utcnow().year,1,1)).days,
-            }
-            days = period_map.get(period, 3650)
-            start_dt = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-            df = yf.download(
-                sym, start=start_dt, interval=interval,
-                auto_adjust=True, progress=False, threads=False,
-            )
-        if df.empty:
-            return pd.DataFrame()
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [c[0].lower() if isinstance(c,tuple) else c.lower() for c in df.columns]
-        else:
-            df.columns = [c.lower() if isinstance(c,str) else str(c).lower() for c in df.columns]
-        needed = ["open","high","low","close","volume"]
-        for col in needed:
-            if col not in df.columns:
-                return pd.DataFrame()
-        df = df[needed].dropna()
-        df.index = pd.to_datetime(df.index, utc=True)
+    """Load OHLCV history from local parquet cache — no yfinance calls."""
+    df = _load_parquet(symbol)
+    if df.empty:
         return df
-    except Exception as e:
-        logger.warning(f"yfinance fail {sym}: {e}")
-        return pd.DataFrame()
+    if start:
+        df = df[df.index >= pd.Timestamp(start, tz="UTC")]
+    if end:
+        df = df[df.index <= pd.Timestamp(end, tz="UTC")]
+    if not start and not end and period:
+        period_map = {
+            "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365,
+            "2y": 730, "5y": 1825, "10y": 3650, "max": 3650,
+        }
+        days = period_map.get(period, 3650)
+        cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=days)
+        df = df[df.index >= cutoff]
+    return df
 
 
 def _compute_indicators_for(symbol: str) -> Optional[dict]:
@@ -453,7 +408,7 @@ async def price_feed_loop():
         try:
             # Full history download: on startup + every 30 min
             now = time.time()
-            if now - state.last_full_download > 1800:
+            if now - state.last_full_download > 21600:
                 logger.info("Downloading full OHLCV history...")
                 for i in range(0, len(all_syms), BATCH):
                     batch = all_syms[i:i+BATCH]
@@ -476,7 +431,7 @@ async def price_feed_loop():
                     None, lambda b=batch: _yf_batch_prices(b)
                 )
                 price_data.update(batch_prices)
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(1.0)
 
             if price_data:
                 state.prices.update(price_data)
@@ -504,17 +459,16 @@ async def price_feed_loop():
 
             # Run signals every 60s (and immediately on startup/history reload)
             if now - _last_signal_run >= 60 and len(state.candles) > 0:
-                mode = TradingMode.DAY
-                new_sigs = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: _run_signals(state.EQUITY_SYMBOLS, mode)
-                )
-                _last_signal_run = now
-                if new_sigs:
-                    state.signals = new_sigs
-                    state.health["last_signal_run"] = datetime.utcnow().isoformat()
-                    state.health["signals_generated"] += len(new_sigs)
+                for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
+                    new_sigs = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
+                    )
+                    state.signals[key] = new_sigs
                     for s in new_sigs:
                         state.signal_history.appendleft(s)
+                    state.health["signals_generated"] += len(new_sigs)
+                _last_signal_run = now
+                state.health["last_signal_run"] = datetime.utcnow().isoformat()
 
             state.record_equity()
 
@@ -524,7 +478,7 @@ async def price_feed_loop():
             state.add_error(err_msg)
             state.health["data_feed"] = "error"
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(30)
 
 
 def _update_portfolio_pnl():
@@ -605,7 +559,7 @@ async def ws_broadcast_loop():
                     sym: {"price": d["price"], "change_pct": d["change_pct"]}
                     for sym, d in list(state.prices.items())[:30]
                 },
-                "signals":    state.signals[:8],
+                "signals":    (state.signals.get("day", []) + state.signals.get("swing", []))[:8],
                 "positions":  list(state.positions.values()),
                 "health":     {
                     "status":    state.health["status"],
@@ -668,7 +622,7 @@ async def get_health():
         **state.health,
         "n_symbols_cached":  len(state.candles),
         "n_prices_live":     len(state.prices),
-        "n_signals":         len(state.signals),
+        "n_signals":         len(state.signals.get("day", [])) + len(state.signals.get("swing", [])),
         "n_ws_clients":      ws_manager.n_clients,
         "uptime_seconds":    int((datetime.utcnow() - datetime.fromisoformat(
                                   state.health["uptime_start"])).total_seconds()),
@@ -752,8 +706,9 @@ async def get_signals(
     limit:  int = 20,
     min_confidence: float = 0.0,
 ):
-    """Return latest generated trading signals."""
-    sigs = state.signals
+    """Return latest generated trading signals filtered by mode."""
+    key = "swing" if mode == "swing" else "day"
+    sigs = state.signals.get(key, [])
     if min_confidence > 0:
         sigs = [s for s in sigs if s.get("confidence", 0) >= min_confidence]
     return sigs[:limit]
@@ -771,7 +726,8 @@ async def refresh_signals(mode: str = "day"):
     new_sigs = await asyncio.get_event_loop().run_in_executor(
         None, lambda: _run_signals(state.EQUITY_SYMBOLS[:20], tm)
     )
-    state.signals = new_sigs
+    key = "swing" if mode == "swing" else "day"
+    state.signals[key] = new_sigs
     state.health["last_signal_run"] = datetime.utcnow().isoformat()
     return {"generated": len(new_sigs), "signals": new_sigs[:5]}
 
@@ -1028,7 +984,7 @@ async def ws_endpoint(ws: WebSocket):
             "ts":          datetime.utcnow().isoformat(),
             "portfolio":   state.portfolio,
             "positions":   list(state.positions.values()),
-            "signals":     state.signals[:10],
+            "signals":     (state.signals.get("day", []) + state.signals.get("swing", []))[:10],
             "prices":      state.prices,
             "equity_curve": state.equity_curve,
             "health":      state.health,
@@ -1861,7 +1817,7 @@ async def get_chart_data(
     # ── Buy/Sell signal markers ───────────────────────────────────────────
     markers = []
     # From current signal list
-    for sig in state.signals:
+    for sig in state.signals.get("day", []) + state.signals.get("swing", []):
         if sig.get("symbol") != sym:
             continue
         direction = (sig.get("direction") or sig.get("signal") or "FLAT").upper()
@@ -2048,7 +2004,7 @@ async def _startup_v4_noop():
             logger.info(f"Baseline model evaluations complete — {len(models)} models")
         asyncio.create_task(_baseline_evals())
 
-    logger.info("AlphaGrid v4 fully started — broker manager + model evaluator active")
+    logger.info("AlphaGrid v7 fully started — broker manager + model evaluator active")
 
 
 # ═════════════════════════════════════════════════════════════════════════════

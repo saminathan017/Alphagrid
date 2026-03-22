@@ -1,5 +1,5 @@
 """
-core/auth_db.py  —  AlphaGrid v6
+core/auth_db.py  —  AlphaGrid v7
 ==================================
 Authentication & Authorization.
 
@@ -63,10 +63,10 @@ ACCESS_MIN    = 60 * 24         # 24 h
 REFRESH_MIN   = 60 * 24 * 30   # 30 days
 DB_PATH       = Path(__file__).parent.parent / "alphagrid_auth.db"
 
-# ── Owner defaults (change password after first login) ────────────────────────
-OWNER_USERNAME  = "admin"
-OWNER_PASSWORD  = "Admin@Grid1"
-OWNER_EMAIL     = "owner@alphagrid.app"   # internal, not shown on login page
+# ── Owner defaults — override via environment variables in .env ───────────────
+OWNER_USERNAME  = os.getenv("ALPHAGRID_OWNER_USERNAME", "admin")
+OWNER_PASSWORD  = os.getenv("ALPHAGRID_OWNER_PASSWORD", "Admin@Grid1")
+OWNER_EMAIL     = os.getenv("ALPHAGRID_OWNER_EMAIL",    "owner@alphagrid.app")
 OWNER_NAME      = "Owner"
 
 
@@ -630,14 +630,14 @@ def seed_default_accounts() -> None:
     Create default accounts on startup if they don't exist.
 
     Owner account (username login, no email needed on login page):
-      username : admin
-      password : Admin@Grid1
+      username : ALPHAGRID_OWNER_USERNAME  (default: admin)
+      password : ALPHAGRID_OWNER_PASSWORD  (default: Admin@Grid1 — change after first login)
       role     : ADMIN
       is_owner : True  ← cannot be deactivated
 
     Demo accounts (email login):
-      builder@alphagrid.app / Builder1!  → BUILDER
-      trader@alphagrid.app  / Trader1!   → TRADER
+      ALPHAGRID_BUILDER_PASSWORD  → builder@alphagrid.app  (BUILDER)
+      ALPHAGRID_TRADER_PASSWORD   → trader@alphagrid.app   (TRADER)
     """
     created = 0
 
@@ -656,7 +656,6 @@ def seed_default_accounts() -> None:
             created += 1
             logger.info(
                 f"Owner account seeded | username: {OWNER_USERNAME} "
-                f"| password: {OWNER_PASSWORD} "
                 f"| CHANGE THIS PASSWORD AFTER FIRST LOGIN"
             )
         else:
@@ -672,8 +671,8 @@ def seed_default_accounts() -> None:
 
     # ── Demo accounts ──────────────────────────────────────────────────────
     demos = [
-        ("builder@alphagrid.app", "Builder1!",  "Alex Builder", UserRole.BUILDER, "builder"),
-        ("trader@alphagrid.app",  "Trader1!",   "Sam Trader",   UserRole.TRADER,  "trader"),
+        ("builder@alphagrid.app", os.getenv("ALPHAGRID_BUILDER_PASSWORD", "Builder1!"), "Builder", UserRole.BUILDER, "builder"),
+        ("trader@alphagrid.app",  os.getenv("ALPHAGRID_TRADER_PASSWORD",  "Trader1!"),  "Trader",  UserRole.TRADER,  "trader"),
     ]
     for em, pw, name, role, uname in demos:
         if not user_manager.get_by_email(em):

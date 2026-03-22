@@ -1,5 +1,5 @@
 """
-scripts/train_models.py  —  AlphaGrid v6 Hedge Fund Edition
+scripts/train_models.py  —  AlphaGrid v7 Hedge Fund Edition
 ============================================================
 Full institutional ML training pipeline.
 
@@ -606,7 +606,7 @@ def s3_upload_symbol(symbol: str, s3_bucket: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AlphaGrid v6 HF Training Pipeline")
+    parser = argparse.ArgumentParser(description="AlphaGrid v7 HF Training Pipeline")
     parser.add_argument("--symbols", default=None,
                         help="Comma-separated symbols (omit to use full universe)")
     parser.add_argument("--all", action="store_true",
@@ -638,7 +638,7 @@ def main():
     logger.add(str(log_file), level="DEBUG", rotation="500 MB")
     logger.info(f"Log file: {log_file}")
 
-    logger.info("AlphaGrid v6 — Hedge Fund Edition Training Pipeline")
+    logger.info("AlphaGrid v7 — Hedge Fund Edition Training Pipeline")
     logger.info(f"Symbols: {symbols} | Lookback: {args.lookback}d | Quick: {args.quick}")
     logger.info(f"torch={TORCH_OK} | lightgbm={LGB_OK} | sklearn={SK_OK}")
     logger.info("""

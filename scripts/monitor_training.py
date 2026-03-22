@@ -205,7 +205,7 @@ def build_display(data: dict) -> Group:
             f"{age_str}"
             f"{now_str}"
         ),
-        title="[bold]AlphaGrid v6 — Training Progress[/bold]",
+        title="[bold]AlphaGrid v7 — Training Progress[/bold]",
         subtitle="  ".join(key_parts),
         border_style="cyan",
         padding=(0, 1),

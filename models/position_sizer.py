@@ -1,5 +1,5 @@
 """
-models/position_sizer.py  —  AlphaGrid v6 Hedge Fund Edition
+models/position_sizer.py  —  AlphaGrid v7 Hedge Fund Edition
 ==============================================================
 Institutional Position Sizing & Take-Profit Cascade Engine.
 
