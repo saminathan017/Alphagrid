@@ -16,7 +16,7 @@ set -euo pipefail
 
 # ── CONFIG — edit these ───────────────────────────────────────────
 S3_BUCKET="your-s3-bucket-name"           # e.g. "alphagrid-models-2024"
-GITHUB_REPO="https://github.com/YOUR_USERNAME/alphagrid-final.git"
+GITHUB_REPO="https://github.com/saminathan017/Alphagrid.git"
 LOOKBACK=3650                             # 10 years
 # SYMBOLS="AAPL,MSFT,NVDA"               # uncomment to train specific symbols only
 # ─────────────────────────────────────────────────────────────────
