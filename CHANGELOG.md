@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v7] — 2024
+## [v7] — 2026
 
 ### Added
 - LICENSE file (MIT)
@@ -28,7 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v6] — 2024
+## [v6] — 2026
 
 ### Added
 - QuantLSTM: TCN front-end + BiLSTM + Multi-Head Attention + SWA + 8-pass TTA
@@ -44,7 +44,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v5] — 2024
+## [v5] — 2026
 
 ### Added
 - Regime-conditional LightGBM with volatility state routing
@@ -54,7 +54,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v4] — 2024
+## [v4] — 2026
 
 ### Added
 - Broker integration: Alpaca, OANDA, Robinhood, paper trader
@@ -63,7 +63,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v3] — 2024
+## [v3] — 2026
 
 ### Added
 - QuantLSTM initial architecture
