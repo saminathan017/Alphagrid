@@ -2,13 +2,14 @@
 dashboard/app.py  —  AlphaGrid v7 Production API
 =================================================
 Real FastAPI server. No mock data. Every endpoint pulls live data from:
-  • yfinance   — real OHLCV prices, intraday + daily
+  • Alpaca WS  — real-time IEX prices for top 30 US equities (10–50ms)
+  • yfinance   — remaining equities + all 46 forex pairs (fallback/polling)
   • TA engine  — live indicator computation via our Numba stack
   • Strategy   — real signal generation from trading_modes.py
   • State store — SQLite via SQLAlchemy for trades/portfolio persistence
 
 WebSocket /ws streams:
-  • Live prices (polled yfinance every 5s)
+  • Live prices — Alpaca real-time for top 30, yfinance polling for rest
   • Generated signals
   • Portfolio snapshot
   • System health heartbeat
@@ -21,6 +22,7 @@ import asyncio
 import json
 import os
 import sys
+import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -49,6 +51,29 @@ try:
 except ImportError:
     YF_OK = False
     logger.warning("yfinance not installed — install with: pip install yfinance")
+
+try:
+    from alpaca.data.live import StockDataStream
+    ALPACA_OK = True
+except ImportError:
+    ALPACA_OK = False
+    StockDataStream = None
+
+# Top 30 most liquid US equities — subscribed to Alpaca free IEX WebSocket feed.
+# Remaining equities + all forex are polled via yfinance as fallback.
+ALPACA_EQUITY_SYMBOLS = [
+    "AAPL","MSFT","NVDA","GOOGL","META","AMZN","TSLA",
+    "AVGO","AMD","QCOM","MU","INTC",
+    "JPM","BAC","GS","V","MA",
+    "LLY","UNH","ABBV",
+    "COST","HD","WMT",
+    "CRWD","PLTR","NET","COIN","SOFI","ZS",
+    "SPY",
+]
+
+# Set to True once the first bar arrives from Alpaca — used to skip yfinance
+# polling for these symbols and avoid redundant fetches.
+_alpaca_running = False
 
 try:
     from strategies.indicators import compute_all
@@ -389,6 +414,68 @@ def _run_signals(symbols: list[str], mode: TradingMode) -> list[dict]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+#  ALPACA REAL-TIME FEED  —  top 30 US equities via free IEX WebSocket
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _start_alpaca_stream(api_key: str, secret_key: str) -> None:
+    """
+    Run the Alpaca WebSocket stream in a dedicated background thread.
+    stream.run() creates its own asyncio event loop, so this must not
+    be called from the main async loop — always start via threading.Thread.
+
+    Updates state.prices directly on each bar. Thread-safe in CPython (GIL).
+    Falls back silently — if this thread dies, yfinance polling covers all symbols.
+    """
+    global _alpaca_running
+
+    if not ALPACA_OK or StockDataStream is None:
+        logger.warning("alpaca-py not installed — run: pip install alpaca-py")
+        return
+
+    _day_open: dict[str, float] = {}
+    stream = StockDataStream(api_key, secret_key, feed="iex")
+
+    async def on_bar(bar) -> None:
+        global _alpaca_running
+        sym    = bar.symbol
+        price  = float(bar.close)
+
+        # Track first bar of the day as the open for change_pct
+        if sym not in _day_open:
+            _day_open[sym] = float(bar.open)
+        open_p     = _day_open.get(sym, price)
+        change_pct = ((price - open_p) / open_p * 100) if open_p > 0 else 0.0
+
+        state.prices[sym] = {
+            "price":      price,
+            "change_pct": change_pct,
+            "open":       float(bar.open),
+            "high":       float(bar.high),
+            "low":        float(bar.low),
+            "volume":     int(bar.volume),
+            "source":     "alpaca",
+        }
+        state.health["last_price_update"] = datetime.now(timezone.utc).isoformat()
+        state.health["data_feed"]         = "alpaca-live"
+        state.health["alpaca"]            = "live"
+        _alpaca_running = True
+
+    stream.subscribe_bars(on_bar, *ALPACA_EQUITY_SYMBOLS)
+    logger.info(
+        f"Alpaca WebSocket connecting — {len(ALPACA_EQUITY_SYMBOLS)} symbols "
+        f"(IEX free feed, yfinance covers remaining equities + all forex)"
+    )
+
+    try:
+        stream.run()   # blocking — owns its own event loop
+    except Exception as e:
+        logger.error(f"Alpaca stream error: {e}")
+        state.health["alpaca"]    = f"error: {e}"
+        state.health["data_feed"] = "yfinance-fallback"
+        _alpaca_running = False
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 #  BACKGROUND TASKS
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -423,10 +510,13 @@ async def price_feed_loop():
                 _last_signal_run = 0.0   # trigger fresh signal run after history reload
                 logger.info(f"History loaded for {len(state.candles)} symbols")
 
-            # Live price update
+            # Live price update via yfinance.
+            # Skip symbols already covered by the Alpaca WebSocket feed.
+            alpaca_covered = set(ALPACA_EQUITY_SYMBOLS) if _alpaca_running else set()
+            poll_syms = [s for s in all_syms if s not in alpaca_covered]
             price_data = {}
-            for i in range(0, len(all_syms), BATCH):
-                batch = all_syms[i:i+BATCH]
+            for i in range(0, len(poll_syms), BATCH):
+                batch = poll_syms[i:i+BATCH]
                 batch_prices = await asyncio.get_event_loop().run_in_executor(
                     None, lambda b=batch: _yf_batch_prices(b)
                 )
@@ -596,7 +686,24 @@ async def ws_broadcast_loop():
 async def startup():
     asyncio.create_task(price_feed_loop())
     asyncio.create_task(ws_broadcast_loop())
-    logger.info("AlphaGrid API v6 started — 10-year real data mode")
+
+    # Start Alpaca real-time feed if credentials are configured
+    _alpaca_key    = os.getenv("ALPACA_API_KEY", "")
+    _alpaca_secret = os.getenv("ALPACA_SECRET_KEY", "")
+    if _alpaca_key and _alpaca_secret:
+        threading.Thread(
+            target=_start_alpaca_stream,
+            args=(_alpaca_key, _alpaca_secret),
+            daemon=True,
+            name="alpaca-feed",
+        ).start()
+        state.health["alpaca"] = "connecting"
+        logger.info("Alpaca feed thread started")
+    else:
+        state.health["alpaca"] = "not configured — set ALPACA_API_KEY + ALPACA_SECRET_KEY in .env"
+        logger.info("Alpaca keys not set — all prices via yfinance")
+
+    logger.info("AlphaGrid v7 started — 10-year real data mode")
 
     # ── 10-year history download in background ────────────────────────────────
     if HIST_OK and history_manager:
