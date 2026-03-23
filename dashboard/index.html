@@ -927,52 +927,6 @@ input, select, textarea { font-family: inherit; }
 }
 @keyframes authPulse { 0%,100%{opacity:.4} 50%{opacity:1} }
 
-/* ════════════════════════════════════════════════════
-   BROKER PAGE SPECIFIC
-════════════════════════════════════════════════════ */
-.broker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 14px; }
-.broker-card {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  overflow: hidden;
-}
-.broker-card-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(255,255,255,.015);
-}
-.broker-name {
-  font-family: var(--font-head);
-  font-size: 13px; font-weight: 700;
-  color: var(--t1);
-}
-.broker-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
-.broker-note {
-  font-size: 11px; font-weight: 300;
-  font-family: var(--font-body);
-  color: var(--t3);
-  line-height: 1.5;
-}
-.broker-note a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
-.broker-actions { display: flex; gap: 6px; }
-.broker-result {
-  font-size: 11px; font-weight: 300;
-  font-family: var(--font-body);
-  line-height: 1.5;
-}
-.broker-warn {
-  padding: 9px 12px;
-  background: rgba(245,166,35,.06);
-  border: 1px solid rgba(245,166,35,.2);
-  border-radius: var(--r-sm);
-  font-size: 10px; font-weight: 300;
-  font-family: var(--font-body);
-  color: rgba(245,166,35,.85);
-  line-height: 1.5;
-}
-.broker-acct { display: none; }
 
 /* ════════════════════════════════════════════════════
    EVAL PAGE SPECIFIC
@@ -1186,28 +1140,6 @@ input, select, textarea { font-family: inherit; }
 .sv           { font-family: var(--font-head); font-size: 21px; font-weight: 700; color: var(--t1); line-height: 1; }
 .sv.g { color: var(--green); } .sv.r { color: var(--red); } .sv.b { color: var(--blue); } .sv.y { color: var(--amber); }
 .ss           { font-size: 10px; font-weight: 300; font-family: var(--font-body); color: var(--t3); margin-top: 5px; }
-/* Old remove modal compat */
-.rm-overlay   { position: fixed; inset: 0; z-index: 9000; background: rgba(3,5,8,.88); display: flex; align-items: center; justify-content: center; }
-.rm-modal     { background: var(--surface-3); border: 1px solid rgba(255,68,105,.3); border-radius: var(--r-lg); padding: 28px 32px; width: 440px; max-width: 93vw; }
-.rm-title     { font-family: var(--font-head); font-size: 17px; font-weight: 700; color: var(--red); margin-bottom: 6px; }
-.rm-sub       { font-size: 12px; font-weight: 300; font-family: var(--font-body); color: var(--t3); line-height: 1.6; margin-bottom: 20px; }
-.rm-broker-name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--t1); padding: 9px 12px; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: var(--r-sm); margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
-.rm-options   { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-.rm-option    { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: var(--r-sm); cursor: pointer; }
-.rm-option input[type=checkbox] { accent-color: var(--red); margin-top: 2px; }
-.rm-option-label { font-family: var(--font-body); font-size: 12px; font-weight: 500; color: var(--t1); }
-.rm-option-desc  { font-family: var(--font-body); font-size: 10px; font-weight: 300; color: var(--t3); line-height: 1.4; margin-top: 2px; }
-.rm-warning   { padding: 10px 12px; background: rgba(255,68,105,.06); border: 1px solid rgba(255,68,105,.2); border-radius: var(--r-sm); font-size: 11px; font-family: var(--font-body); color: rgba(255,68,105,.85); line-height: 1.5; margin-bottom: 18px; display: none; }
-.rm-warning.show { display: block; }
-.rm-actions   { display: flex; gap: 10px; }
-.rm-cancel-btn { flex: 1; font-family: var(--font-head); font-size: 11px; font-weight: 600; letter-spacing: .08em; padding: 11px; border: 1px solid var(--border); background: none; color: var(--t3); border-radius: var(--r-sm); cursor: pointer; text-transform: uppercase; }
-.rm-cancel-btn:hover { color: var(--t1); border-color: rgba(255,255,255,.2); }
-.rm-confirm-btn { flex: 2; font-family: var(--font-head); font-size: 11px; font-weight: 700; letter-spacing: .08em; padding: 11px; border: 1px solid rgba(255,68,105,.4); background: rgba(255,68,105,.1); color: var(--red); border-radius: var(--r-sm); cursor: pointer; text-transform: uppercase; }
-.rm-confirm-btn:hover { background: rgba(255,68,105,.2); }
-.rm-confirm-btn:disabled { opacity: .4; cursor: not-allowed; }
-.rm-spinner   { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,68,105,.3); border-top-color: var(--red); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 5px; }
-.rm-result    { margin-top: 12px; font-family: var(--font-mono); font-size: 10px; line-height: 1.6; display: none; }
-.rm-result.show { display: block; }
 /* Auth guard user pill compat (now in sidebar) */
 #user-pill    { display: none !important; }
 .user-pill    { display: none !important; }
@@ -1280,9 +1212,7 @@ input, select, textarea { font-family: inherit; }
         <button class="nav-item" onclick="sw('chart',this)">
           <span class="nav-icon">◫</span>Chart
         </button>
-        <button class="nav-item" onclick="sw('broker',this)">
-          <span class="nav-icon">⊞</span>Broker
-        </button>
+
         <button class="nav-item" onclick="sw('trades',this)">
           <span class="nav-icon">≡</span>Trades
         </button>
@@ -1523,133 +1453,6 @@ input, select, textarea { font-family: inherit; }
     </div>
   </div>
 </div>
-<!-- ══════════════════════════════ BROKER PAGE ═════════════════════════════ -->
-<div class="page" id="pg-broker">
-
-  <!-- Connection cards -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:14px">
-
-    <!-- Alpaca card -->
-    <div class="panel">
-      <div class="ph">
-        <span class="pt">Alpaca Markets</span>
-        <span class="badge" id="alpaca-status-badge" style="background:rgba(255,255,255,.05);color:var(--t3)">DISCONNECTED</span>
-      </div>
-      <div class="pb2" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:9px;font-family:var(--font-body);color:var(--t3);line-height:1.5;margin-bottom:4px">US Equities. Free paper trading. Get keys at <a href="https://alpaca.markets" target="_blank" style="color:var(--green)">alpaca.markets</a></div>
-        <input id="alpaca-key" placeholder="API Key" type="text" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <input id="alpaca-secret" placeholder="Secret Key" type="password" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--t3);cursor:pointer"><input type="checkbox" id="alpaca-paper" checked style="accent-color:var(--green)"> Paper Trading Mode</label>
-        <div style="display:flex;gap:6px">
-          <button onclick="connectAlpaca()" style="flex:1;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:.08em;padding:9px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.08);color:var(--green);border-radius:3px;cursor:pointer;text-transform:uppercase">CONNECT</button>
-          <button onclick="disconnectBroker('alpaca')" id="alpaca-remove-btn" style="font-family:var(--font-head);font-size:9px;font-weight:600;letter-spacing:.07em;padding:9px 11px;border:1px solid rgba(255,51,102,.28);background:rgba(255,51,102,.06);color:var(--red);border-radius:3px;cursor:pointer;text-transform:uppercase;transition:all .15s" onmouseover="this.style.background='rgba(255,51,102,.14)'" onmouseout="this.style.background='rgba(255,51,102,.06)'">Remove</button>
-        </div>
-        <div id="alpaca-result" style="font-size:9px;font-family:var(--font-body);color:var(--t3)"></div>
-        <div id="alpaca-account" style="display:none"></div>
-      </div>
-    </div>
-
-    <!-- OANDA card -->
-    <div class="panel">
-      <div class="ph">
-        <span class="pt">OANDA Forex</span>
-        <span class="badge" id="oanda-status-badge" style="background:rgba(255,255,255,.05);color:var(--t3)">DISCONNECTED</span>
-      </div>
-      <div class="pb2" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:9px;font-family:var(--font-body);color:var(--t3);line-height:1.5;margin-bottom:4px">Forex & CFD. Free practice account at <a href="https://www.oanda.com" target="_blank" style="color:var(--green)">oanda.com</a></div>
-        <input id="oanda-key" placeholder="API Key" type="text" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <input id="oanda-acct" placeholder="Account ID (e.g. 001-001-12345)" type="text" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <label style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--t3);cursor:pointer"><input type="checkbox" id="oanda-practice" checked style="accent-color:var(--green)"> Practice Account</label>
-        <div style="display:flex;gap:6px">
-          <button onclick="connectOanda()" style="flex:1;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:.08em;padding:9px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.08);color:var(--green);border-radius:3px;cursor:pointer;text-transform:uppercase">CONNECT</button>
-          <button onclick="disconnectBroker('oanda')" id="oanda-remove-btn" style="font-family:var(--font-head);font-size:9px;font-weight:600;letter-spacing:.07em;padding:9px 11px;border:1px solid rgba(255,51,102,.28);background:rgba(255,51,102,.06);color:var(--red);border-radius:3px;cursor:pointer;text-transform:uppercase;transition:all .15s" onmouseover="this.style.background='rgba(255,51,102,.14)'" onmouseout="this.style.background='rgba(255,51,102,.06)'">Remove</button>
-        </div>
-        <div id="oanda-result" style="font-size:9px;font-family:var(--font-body);color:var(--t3)"></div>
-        <div id="oanda-account" style="display:none"></div>
-      </div>
-    </div>
-
-
-    <!-- Robinhood card -->
-    <div class="panel">
-      <div class="ph">
-        <span class="pt">Robinhood</span>
-        <span class="badge" id="rh-status-badge" style="background:rgba(255,255,255,.05);color:var(--t3)">DISCONNECTED</span>
-      </div>
-      <div class="pb2" style="display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:9px;font-family:var(--font-body);color:var(--t3);line-height:1.5;margin-bottom:4px">
-          US equities, ETFs &amp; crypto. Commission-free. Uses <code style="font-family:var(--font-mono);font-size:8px;color:var(--blue)">robin_stocks</code> (unofficial API).
-          <a href="https://robinhood.com" target="_blank" style="color:var(--green)">robinhood.com</a>
-        </div>
-        <input id="rh-user" placeholder="Email address" type="email" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <input id="rh-pass" placeholder="Password" type="password" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:11px;width:100%;outline:none">
-        <input id="rh-mfa" placeholder="TOTP secret key (optional — see docs)" type="text" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:7px 10px;color:var(--t1);font-family:var(--font-mono);font-size:10px;width:100%;outline:none">
-        <div style="font-size:8px;font-family:var(--font-body);font-weight:300;color:var(--t3);line-height:1.4;padding:6px 8px;background:rgba(255,230,0,.05);border:1px solid rgba(255,230,0,.15);border-radius:3px">
-          <strong style="color:var(--amber)">TOTP Key:</strong> Robinhood app → Account → Security → 2FA → Authenticator App → Setup → copy the <em>text key</em> (not QR). Enables fully automated login. Without it, you'll need to approve login on your phone each time.
-        </div>
-        <div style="display:flex;gap:6px">
-          <button onclick="connectRobinhood()" style="flex:1;font-family:var(--font-head);font-size:10px;font-weight:700;letter-spacing:.08em;padding:9px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.08);color:var(--green);border-radius:3px;cursor:pointer;text-transform:uppercase">CONNECT</button>
-          <button onclick="disconnectBroker('robinhood')" id="robinhood-remove-btn" style="font-family:var(--font-head);font-size:9px;font-weight:600;letter-spacing:.07em;padding:9px 11px;border:1px solid rgba(255,51,102,.28);background:rgba(255,51,102,.06);color:var(--red);border-radius:3px;cursor:pointer;text-transform:uppercase;transition:all .15s" onmouseover="this.style.background='rgba(255,51,102,.14)'" onmouseout="this.style.background='rgba(255,51,102,.06)'">Remove</button>
-        </div>
-        <div id="rh-result" style="font-size:9px;font-family:var(--font-body);color:var(--t3);line-height:1.4"></div>
-        <div id="rh-account" style="display:none"></div>
-        <!-- Robinhood-specific warnings -->
-        <div style="padding:7px 9px;background:rgba(255,119,0,.05);border:1px solid rgba(255,119,0,.2);border-radius:3px;font-size:8px;font-family:var(--font-body);color:rgba(255,119,0,.85);line-height:1.5">
-          <strong>Robinhood limitations via API:</strong><br>
-          • Whole shares only (no fractional via API)<br>
-          • No native stop-loss/take-profit orders — AlphaGrid monitors SL/TP in software<br>
-          • PDT rule: &lt;$25k account → max 3 day trades per 5 days<br>
-          • Unofficial API — may break if Robinhood changes their auth flow
-        </div>
-      </div>
-    </div>
-
-    <!-- Paper card -->
-    <div class="panel">
-      <div class="ph">
-        <span class="pt">Built-in Paper</span>
-        <span class="badge bg">CONNECTED</span>
-      </div>
-      <div class="pb2">
-        <div style="font-size:9px;font-family:var(--font-body);color:var(--t3);line-height:1.5;margin-bottom:10px">No credentials needed. Simulates orders against live yfinance prices with realistic slippage and commissions.</div>
-        <div id="paper-account-summary"></div>
-        <!-- Quick order panel -->
-        <div style="margin-top:12px;border-top:1px solid rgba(255,255,255,.05);padding-top:12px">
-          <div style="font-size:8px;font-family:var(--font-body);font-weight:500;color:var(--t3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Place Order</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-            <input id="po-sym" placeholder="Symbol" value="AAPL" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-            <input id="po-qty" type="number" placeholder="Qty" value="1" min="0.01" step="0.01" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-            <input id="po-sl" placeholder="Stop Loss" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-            <input id="po-tp" placeholder="Take Profit" style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:3px;padding:6px 8px;color:var(--t1);font-family:var(--font-mono);font-size:11px;outline:none">
-          </div>
-          <div style="display:flex;gap:6px;margin-top:6px">
-            <button onclick="placeOrder('buy')" style="flex:1;font-family:var(--font-head);font-size:10px;font-weight:700;padding:9px;border:1px solid rgba(0,255,200,.35);background:rgba(0,255,200,.1);color:var(--green);border-radius:3px;cursor:pointer">BUY</button>
-            <button onclick="placeOrder('sell')" style="flex:1;font-family:var(--font-head);font-size:10px;font-weight:700;padding:9px;border:1px solid rgba(255,51,102,.35);background:rgba(255,51,102,.1);color:var(--red);border-radius:3px;cursor:pointer">SELL</button>
-          </div>
-          <div id="po-result" style="font-size:9px;font-family:var(--font-body);margin-top:6px;color:var(--t3)"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Aggregated positions + order log -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div class="panel">
-      <div class="ph"><span class="pt">All Positions</span><span class="badge bb" id="broker-pos-count">—</span></div>
-      <div class="scw">
-        <table class="tbl"><thead><tr><th>Broker</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>P&L</th><th>Action</th></tr></thead>
-        <tbody id="broker-pos-tb"></tbody></table>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="ph"><span class="pt">Order Log</span><span id="order-log-count" class="badge bb">—</span></div>
-      <div class="scw">
-        <table class="tbl"><thead><tr><th>Time</th><th>Broker</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Status</th><th>Price</th></tr></thead>
-        <tbody id="order-log-tb"></tbody></table>
-      </div>
-    </div>
-  </div>
-</div>
 <!-- ══════════════════════════════ EVAL PAGE ═══════════════════════════════ -->
 <div class="page" id="pg-eval">
 
@@ -1699,55 +1502,6 @@ input, select, textarea { font-family: inherit; }
 </div>
 
 
-
-
-<!-- ── Remove Broker Account Modal ──────────────────────────────────────── -->
-<div id="rm-overlay" class="rm-overlay" style="display:none" onclick="if(event.target===this)closeRemoveModal()">
-  <div class="rm-modal">
-    <div class="rm-title">Remove Broker Account</div>
-    <div class="rm-sub">This will disconnect the account and remove all credentials from this session. This action cannot be undone.</div>
-
-    <div class="rm-broker-name">
-      <span id="rm-broker-label" style="font-family:var(--font-head);font-weight:700;color:var(--blue)">—</span>
-      <span id="rm-broker-mode">—</span>
-    </div>
-
-    <div class="rm-options">
-      <label class="rm-option">
-        <input type="checkbox" id="rm-close-pos" checked>
-        <div class="rm-option-text">
-          <div class="rm-option-label">Close all open positions first</div>
-          <div class="rm-option-desc">Submit market close orders for every open position on this broker before disconnecting. Recommended — leaving positions open without active monitoring is risky.</div>
-        </div>
-      </label>
-      <label class="rm-option">
-        <input type="checkbox" id="rm-cancel-orders" checked>
-        <div class="rm-option-text">
-          <div class="rm-option-label">Cancel all pending orders</div>
-          <div class="rm-option-desc">Cancel any open/queued orders on this broker that haven't filled yet.</div>
-        </div>
-      </label>
-      <label class="rm-option">
-        <input type="checkbox" id="rm-clear-creds" checked>
-        <div class="rm-option-text">
-          <div class="rm-option-label">Clear credentials from fields</div>
-          <div class="rm-option-desc">Wipe the API key, password, and any token fields from the Broker tab after disconnecting.</div>
-        </div>
-      </label>
-    </div>
-
-    <div class="rm-warning" id="rm-live-warn">
-      ⚠ This broker is connected in <strong>LIVE trading mode</strong>. Any open positions will be closed with real money at current market price. Make sure you understand the P&L impact before proceeding.
-    </div>
-
-    <div class="rm-actions">
-      <button class="rm-cancel-btn" onclick="closeRemoveModal()">Cancel</button>
-      <button class="rm-confirm-btn" id="rm-confirm-btn" onclick="confirmRemove()">Remove Account</button>
-    </div>
-
-    <div class="rm-result" id="rm-result"></div>
-  </div>
-</div>
 
 
 <!-- ── Change Password Modal ─────────────────────────────────────────────── -->
@@ -1889,7 +1643,7 @@ function sw(name, el) {
 
 function restorePageFromHash() {
   const hash = location.hash.replace('#', '');
-  const valid = ['overview','signals','universe','trades','chart','broker','models','risk','eval'];
+  const valid = ['overview','signals','universe','trades','chart','models','risk','eval'];
   if (!hash || !valid.includes(hash)) return;
   // Find the nav button for this page
   const el = document.querySelector(`[onclick*="sw('${hash}"]`);
@@ -2645,9 +2399,9 @@ const AUTH_ROLES = {
 };
 
 // Tabs visible to TRADER role only
-const TRADER_TABS   = ['overview','signals','universe','trades','chart','broker'];
+const TRADER_TABS   = ['overview','signals','universe','trades','chart'];
 // Tabs visible to BUILDER + ADMIN
-const BUILDER_TABS  = ['overview','signals','universe','trades','chart','broker','models','risk','eval'];
+const BUILDER_TABS  = ['overview','signals','universe','trades','chart','models','risk','eval'];
 
 let _currentUser  = null;
 let _currentRole  = null;
@@ -3029,332 +2783,6 @@ setInterval(async () => {
 }, 5000);
 
 // ════════════════════════════════════════════════════════════════
-//  BROKER PAGE
-// ════════════════════════════════════════════════════════════════
-
-async function connectAlpaca() {
-  const key    = $('alpaca-key').value.trim();
-  const secret = $('alpaca-secret').value.trim();
-  const paper  = $('alpaca-paper').checked;
-  const el     = $('alpaca-result');
-  if (!key || !secret) { el.textContent = 'Enter API key and secret key'; el.style.color='var(--amber)'; return; }
-  el.textContent = 'Connecting…'; el.style.color = 'var(--t3)';
-  try {
-    const r = await apiFetch(`/api/broker/connect/alpaca?api_key=${encodeURIComponent(key)}&secret_key=${encodeURIComponent(secret)}&paper=${paper}`, {method:'POST'});
-    if (r.success) {
-      el.textContent = `✅ Connected (${paper?'paper':'LIVE'})`;
-      el.style.color = 'var(--green)';
-      $('alpaca-status-badge').textContent = paper ? 'PAPER' : 'LIVE';
-      $('alpaca-status-badge').className = 'badge ' + (paper ? 'by' : 'br');
-      log('info', `Alpaca connected — ${paper?'paper':'LIVE'} mode`);
-      await refreshBrokerPage();
-    } else {
-      el.textContent = '✗ ' + r.error;
-      el.style.color = 'var(--red)';
-    }
-  } catch(e) { el.textContent = '✗ ' + e.message; el.style.color='var(--red)'; }
-}
-
-async function connectRobinhood() {
-  const user   = $('rh-user').value.trim();
-  const pass   = $('rh-pass').value.trim();
-  const mfa    = $('rh-mfa').value.trim();
-  const el     = $('rh-result');
-  if (!user || !pass) {
-    el.textContent = 'Enter email and password';
-    el.style.color = 'var(--amber)'; return;
-  }
-  el.textContent = 'Connecting — this may take 10–20s…';
-  el.style.color  = 'var(--t3)';
-  try {
-    let url = `/api/broker/connect/robinhood?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`;
-    if (mfa) url += `&mfa_secret=${encodeURIComponent(mfa)}`;
-    const r = await apiFetch(url, {method:'POST'});
-    if (r.success) {
-      el.textContent = '✅ Robinhood connected';
-      el.style.color = 'var(--green)';
-      $('rh-status-badge').textContent = 'CONNECTED';
-      $('rh-status-badge').className   = 'badge bg';
-      log('info', 'Robinhood connected successfully');
-      await refreshBrokerPage();
-    } else {
-      const errMsg = r.error || 'Unknown error';
-      el.innerHTML = `<span style="color:var(--red)">✗ ${errMsg}</span>`;
-      // Check for device approval case and give guidance
-      if (errMsg.includes('device approval') || errMsg.includes('verification_workflow')) {
-        el.innerHTML += `<br><span style="color:var(--amber)">→ Open your Robinhood app and approve the login request, then click CONNECT again.</span>`;
-      } else if (errMsg.includes('TOTP') || errMsg.includes('mfa_secret')) {
-        el.innerHTML += `<br><span style="color:var(--amber)">→ Add your TOTP secret key from the Robinhood authenticator setup to avoid this.</span>`;
-      }
-      $('rh-status-badge').textContent = 'ERROR';
-      $('rh-status-badge').className   = 'badge br';
-    }
-  } catch(e) {
-    el.innerHTML = `<span style="color:var(--red)">✗ ${e.message}</span>`;
-    el.innerHTML += `<br><span style="color:var(--t3)">Make sure the AlphaGrid server is running and <code>robin_stocks</code> is installed.</span>`;
-    $('rh-status-badge').textContent = 'ERROR';
-    $('rh-status-badge').className   = 'badge br';
-  }
-}
-
-async function connectOanda() {
-  const key      = $('oanda-key').value.trim();
-  const acct     = $('oanda-acct').value.trim();
-  const practice = $('oanda-practice').checked;
-  const el       = $('oanda-result');
-  if (!key || !acct) { el.textContent = 'Enter API key and account ID'; el.style.color='var(--amber)'; return; }
-  el.textContent = 'Connecting…'; el.style.color='var(--t3)';
-  try {
-    const r = await apiFetch(`/api/broker/connect/oanda?api_key=${encodeURIComponent(key)}&account_id=${encodeURIComponent(acct)}&practice=${practice}`, {method:'POST'});
-    if (r.success) {
-      el.textContent = `✅ Connected (${practice?'practice':'LIVE'})`;
-      el.style.color = 'var(--green)';
-      $('oanda-status-badge').textContent = practice ? 'PRACTICE' : 'LIVE';
-      $('oanda-status-badge').className = 'badge ' + (practice ? 'by' : 'br');
-      log('info', `OANDA connected — ${practice?'practice':'LIVE'} mode`);
-      await refreshBrokerPage();
-    } else {
-      el.textContent = '✗ ' + r.error;
-      el.style.color = 'var(--red)';
-    }
-  } catch(e) { el.textContent = '✗ ' + e.message; el.style.color='var(--red)'; }
-}
-
-// ── Remove Broker Account Flow ───────────────────────────────────────────────
-let _rmTarget = null;  // broker id pending removal
-
-function disconnectBroker(id) {
-  // Upgrade: open the confirmation modal instead of immediately disconnecting
-  showRemoveModal(id);
-}
-
-function showRemoveModal(brokerId) {
-  _rmTarget = brokerId;
-
-  // Broker display name
-  const names = {
-    alpaca: 'Alpaca Markets', oanda: 'OANDA Forex',
-    robinhood: 'Robinhood', paper: 'Built-in Paper',
-  };
-  $('rm-broker-label').textContent = names[brokerId] || brokerId.toUpperCase();
-
-  // Mode badge (paper/live/practice)
-  const badge = $(`${brokerId}-status-badge`);
-  const mode  = badge ? badge.textContent : '—';
-  $('rm-broker-mode').textContent = mode;
-
-  // Show live warning only if actually live (not paper/practice)
-  const isLive = ['LIVE','CONNECTED'].includes(mode) &&
-                 !['PAPER','PRACTICE','DISCONNECTED','ERROR'].includes(mode);
-  $('rm-live-warn').classList.toggle('show', isLive);
-
-  // Reset state
-  $('rm-confirm-btn').disabled  = false;
-  $('rm-confirm-btn').innerHTML = 'Remove Account';
-  $('rm-result').classList.remove('show');
-  $('rm-result').textContent = '';
-
-  $('rm-overlay').style.display = 'flex';
-}
-
-function closeRemoveModal() {
-  $('rm-overlay').style.display = 'none';
-  _rmTarget = null;
-}
-
-async function confirmRemove() {
-  if (!_rmTarget) return;
-  const id           = _rmTarget;
-  const closePos     = $('rm-close-pos').checked;
-  const cancelOrders = $('rm-cancel-orders').checked;
-  const clearCreds   = $('rm-clear-creds').checked;
-  const btn          = $('rm-confirm-btn');
-
-  btn.disabled  = true;
-  btn.innerHTML = '<span class="rm-spinner"></span>Removing…';
-
-  const result = $('rm-result');
-  result.classList.remove('show');
-
-  try {
-    // Call the full removal endpoint
-    const url = `/api/broker/disconnect/${id}?close_positions=${closePos}`;
-    const r   = await apiFetch(url, { method: 'POST' });
-
-    // Build result summary
-    const lines = [];
-    if (r.positions_closed > 0)
-      lines.push(`✅ Closed ${r.positions_closed} open position${r.positions_closed>1?'s':''}`);
-    if (r.orders_cancelled > 0)
-      lines.push(`✅ Cancelled ${r.orders_cancelled} pending order${r.orders_cancelled>1?'s':''}`);
-    if (r.cleared?.length)
-      lines.push(`✅ Cleared: ${r.cleared.join(', ')}`);
-    lines.push(`✅ ${(r.disconnected||id).toUpperCase()} account fully removed`);
-
-    result.innerHTML = lines.map(l =>
-      `<div style="color:var(--green)">${l}</div>`
-    ).join('');
-    result.classList.add('show');
-
-    // Update status badge immediately
-    const badgeEl = $(`${id}-status-badge`);
-    if (badgeEl) {
-      badgeEl.textContent  = 'DISCONNECTED';
-      badgeEl.className    = 'badge';
-      badgeEl.style.cssText = 'background:rgba(255,255,255,.05);color:var(--t3)';
-    }
-
-    // Clear credential fields if requested
-    if (clearCreds) _clearCredentialFields(id);
-
-    // Clear account info panels
-    const acctEl = $(`${id}-account`);
-    if (acctEl) { acctEl.style.display = 'none'; acctEl.innerHTML = ''; }
-
-    // Clear result labels
-    const resEl = $(`${id}-result`);
-    if (resEl) { resEl.textContent = ''; }
-
-    log('info', `${id.toUpperCase()} account removed — ${r.positions_closed} pos closed, ${r.orders_cancelled} orders cancelled`);
-
-    // Refresh broker page after 1.2s (give user a moment to read the result)
-    setTimeout(async () => {
-      closeRemoveModal();
-      await refreshBrokerPage();
-    }, 1800);
-
-  } catch(e) {
-    result.innerHTML = `<div style="color:var(--red)">✗ Removal failed: ${e.message}</div>
-      <div style="color:var(--t3);margin-top:4px;font-size:9px">Check that the AlphaGrid server is running and try again.</div>`;
-    result.classList.add('show');
-    btn.disabled  = false;
-    btn.innerHTML = 'Retry Removal';
-    log('error', `Account removal failed for ${id}: ${e.message}`);
-  }
-}
-
-function _clearCredentialFields(brokerId) {
-  // Wipe all input fields for this broker from the UI
-  const fieldMap = {
-    alpaca:     ['alpaca-key', 'alpaca-secret'],
-    oanda:      ['oanda-key', 'oanda-acct'],
-    robinhood:  ['rh-user', 'rh-pass', 'rh-mfa'],
-  };
-  const fields = fieldMap[brokerId] || [];
-  fields.forEach(fid => {
-    const el = $(fid);
-    if (el) el.value = '';
-  });
-  if (fields.length) log('info', `Credentials cleared for ${brokerId}`);
-}
-
-
-async function placeOrder(side) {
-  const sym = ($('po-sym').value || 'AAPL').trim().toUpperCase();
-  const qty = parseFloat($('po-qty').value) || 1;
-  const sl  = $('po-sl').value ? parseFloat($('po-sl').value) : null;
-  const tp  = $('po-tp').value ? parseFloat($('po-tp').value) : null;
-  const el  = $('po-result');
-  el.textContent = 'Placing…';
-  try {
-    let url = `/api/broker/order?symbol=${sym}&side=${side}&qty=${qty}&broker=paper`;
-    if (sl) url += `&stop_loss=${sl}`;
-    if (tp) url += `&take_profit=${tp}`;
-    const r = await apiFetch(url, {method:'POST'});
-    el.textContent = r.status === 'filled'
-      ? `✅ ${side.toUpperCase()} ${qty} ${sym} @ $${r.filled_price?.toFixed(2)||'—'}`
-      : `⚠ ${r.status}: ${r.error||''}`;
-    el.style.color = r.status==='filled' ? 'var(--green)' : 'var(--amber)';
-    log('trade', `Order: ${side.toUpperCase()} ${qty} ${sym} → ${r.status}`);
-    await refreshBrokerPage();
-  } catch(e) { el.textContent='✗ '+e.message; el.style.color='var(--red)'; }
-}
-
-async function closePosition(sym, broker) {
-  if (!confirm(`Close position: ${sym}?`)) return;
-  try {
-    const r = await apiFetch(`/api/broker/close/${sym}?broker=${broker||'paper'}`, {method:'POST'});
-    log('trade', `Closed position: ${sym} → ${r.success ? 'OK' : 'FAILED'}`);
-    await refreshBrokerPage();
-  } catch(e) { log('error', `Close failed: ${e.message}`); }
-}
-
-async function refreshBrokerPage() {
-  // Accounts
-  const accounts = await apiFetch('/api/broker/accounts').catch(() => []);
-  const paperSum = $('paper-account-summary');
-  if (paperSum && accounts.length) {
-    const paper = accounts.find(a => a.broker === 'paper') || accounts[0];
-    if (paper) {
-      paperSum.innerHTML = [
-        {k:'Portfolio Value', v:'$'+fmt(paper.portfolio_value||paper.nav||paper.balance||0)},
-        {k:'Cash',            v:'$'+fmt(paper.cash||0)},
-        {k:'Unrealised P&L',  v:(paper.unrealised_pnl>=0?'+$':'-$')+fmt(Math.abs(paper.unrealised_pnl||0))},
-      ].map(r=>`<div class="sys-row"><span class="sys-k">${r.k}</span><span class="sys-v ok">${r.v}</span></div>`).join('');
-    }
-  }
-
-  // Alpaca account
-  const alpacaAcct = accounts.find(a => a.broker === 'alpaca');
-  const rhAcct     = accounts.find(a => a.broker === 'robinhood');
-  if (rhAcct) {
-    $('rh-account').style.display = 'block';
-    $('rh-account').innerHTML = [
-      {k:'Portfolio Value', v:'$'+fmt(rhAcct.portfolio_value||rhAcct.equity||0)},
-      {k:'Cash',            v:'$'+fmt(rhAcct.cash||0)},
-      {k:'Buying Power',    v:'$'+fmt(rhAcct.buying_power||0)},
-      {k:'Day Trades Used', v: rhAcct.day_trade_count||0},
-      {k:'PDT Flag',        v: rhAcct.pattern_day_trader ? '⚠ YES' : 'No'},
-    ].map(r=>`<div class="sys-row"><span class="sys-k">${r.k}</span><span class="sys-v ${r.k==='PDT Flag'&&rhAcct.pattern_day_trader?'warn':'ok'}">${r.v}</span></div>`).join('');
-  }
-
-  if (alpacaAcct) {
-    $('alpaca-account').style.display = 'block';
-    $('alpaca-account').innerHTML = [
-      {k:'Equity', v:'$'+fmt(alpacaAcct.equity||0)},
-      {k:'Buying Power', v:'$'+fmt(alpacaAcct.buying_power||0)},
-      {k:'Day Trades', v: alpacaAcct.day_trade_count||0},
-    ].map(r=>`<div class="sys-row"><span class="sys-k">${r.k}</span><span class="sys-v ok">${r.v}</span></div>`).join('');
-  }
-
-  // Positions
-  const positions = await apiFetch('/api/broker/positions').catch(() => []);
-  $('broker-pos-count').textContent = positions.length + ' positions';
-  $('broker-pos-tb').innerHTML = positions.length
-    ? positions.map(p => {
-        const cls = (p.unrealised_pnl||0) >= 0 ? 'var(--green)' : 'var(--red)';
-        return `<tr>
-          <td><span class="badge bb">${(p.broker||'paper').toUpperCase()}</span></td>
-          <td style="font-family:var(--font-head);font-weight:700;color:var(--blue)">${p.symbol}</td>
-          <td><span class="badge ${p.side==='LONG'?'bg':'br'}">${p.side||'—'}</span></td>
-          <td>${p.qty}</td>
-          <td>$${fmt(p.avg_entry||p.entry_price||0)}</td>
-          <td style="color:${cls}">${(p.unrealised_pnl||0)>=0?'+$':'-$'}${fmt(Math.abs(p.unrealised_pnl||0))}</td>
-          <td><button onclick="closePosition('${p.symbol}','${p.broker||'paper'}')" style="font-size:8px;font-family:var(--font-body);padding:2px 7px;border:1px solid rgba(255,51,102,.3);background:rgba(255,51,102,.08);color:var(--red);border-radius:2px;cursor:pointer">CLOSE</button></td>
-        </tr>`;
-      }).join('')
-    : `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--t3);font-family:var(--font-body)">No open positions</td></tr>`;
-
-  // Order log
-  const orders = await apiFetch('/api/broker/order-log').catch(() => []);
-  $('order-log-count').textContent = orders.length + ' orders';
-  $('order-log-tb').innerHTML = orders.length
-    ? orders.slice(0,30).map(o => {
-        const cls = o.status==='filled' ? 'var(--green)' : o.status==='rejected' ? 'var(--red)' : 'var(--amber)';
-        return `<tr>
-          <td style="color:var(--t3)">${(o.submitted_at||'').slice(11,19)}</td>
-          <td><span class="badge bb">${(o.broker||'paper').toUpperCase()}</span></td>
-          <td style="font-family:var(--font-head);font-weight:700;color:var(--blue)">${o.symbol}</td>
-          <td><span class="badge ${o.side==='buy'?'bg':'br'}">${(o.side||'').toUpperCase()}</span></td>
-          <td>${o.qty}</td>
-          <td style="color:${cls}">${(o.status||'').toUpperCase()}</td>
-          <td>${o.filled_price ? '$'+fmt(o.filled_price) : '—'}</td>
-        </tr>`;
-      }).join('')
-    : `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--t3);font-family:var(--font-body)">No orders yet</td></tr>`;
-}
-
-// ════════════════════════════════════════════════════════════════
 //  EVAL PAGE — Model Evaluation + Auto-Upgrade
 // ════════════════════════════════════════════════════════════════
 
@@ -3510,7 +2938,7 @@ const _baseSW = sw;
 //  SIDEBAR NAVIGATION + AUTH WIRING
 // ════════════════════════════════════════════════════════════════
 const PAGE_TITLES = {
-  overview:'Overview', signals:'Signals', chart:'Chart', broker:'Broker',
+  overview:'Overview', signals:'Signals', chart:'Chart',
   trades:'Trades', universe:'Universe', history:'History', risk:'Risk',
   models:'Models', eval:'Evaluation'
 };

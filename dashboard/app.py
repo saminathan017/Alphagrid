@@ -23,7 +23,7 @@ import os
 import sys
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -431,7 +431,7 @@ async def price_feed_loop():
                     None, lambda b=batch: _yf_batch_prices(b)
                 )
                 price_data.update(batch_prices)
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.2)
 
             if price_data:
                 state.prices.update(price_data)
@@ -548,26 +548,43 @@ ws_manager = WSManager()
 
 
 async def ws_broadcast_loop():
-    """Push live state to all connected WebSocket clients every 2s."""
+    """Push live state to all connected WebSocket clients — only when data changes."""
+    _last_price_update = ""
+    _last_signal_count = 0
+    _last_position_count = 0
     while True:
         if ws_manager.n_clients > 0:
-            payload = {
-                "type":       "tick",
-                "ts":         datetime.utcnow().isoformat(),
-                "portfolio":  state.portfolio,
-                "prices":     {
-                    sym: {"price": d["price"], "change_pct": d["change_pct"]}
-                    for sym, d in list(state.prices.items())[:30]
-                },
-                "signals":    (state.signals.get("day", []) + state.signals.get("swing", []))[:8],
-                "positions":  list(state.positions.values()),
-                "health":     {
-                    "status":    state.health["status"],
-                    "data_feed": state.health["data_feed"],
-                    "last_price_update": state.health["last_price_update"],
-                },
-            }
-            await ws_manager.broadcast(payload)
+            current_price_update = state.health.get("last_price_update", "")
+            current_signal_count = len(state.signals.get("day", [])) + len(state.signals.get("swing", []))
+            current_position_count = len(state.positions)
+
+            data_changed = (
+                current_price_update != _last_price_update or
+                current_signal_count != _last_signal_count or
+                current_position_count != _last_position_count
+            )
+
+            if data_changed:
+                payload = {
+                    "type":       "tick",
+                    "ts":         datetime.now(timezone.utc).isoformat(),
+                    "portfolio":  state.portfolio,
+                    "prices":     {
+                        sym: {"price": d["price"], "change_pct": d["change_pct"]}
+                        for sym, d in list(state.prices.items())[:30]
+                    },
+                    "signals":    (state.signals.get("day", []) + state.signals.get("swing", []))[:8],
+                    "positions":  list(state.positions.values()),
+                    "health":     {
+                        "status":    state.health["status"],
+                        "data_feed": state.health["data_feed"],
+                        "last_price_update": current_price_update,
+                    },
+                }
+                await ws_manager.broadcast(payload)
+                _last_price_update   = current_price_update
+                _last_signal_count   = current_signal_count
+                _last_position_count = current_position_count
         await asyncio.sleep(2)
 
 
