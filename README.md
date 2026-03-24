@@ -53,7 +53,9 @@ No API keys required. All market data comes from yfinance, which is free and wor
 
 ## Backtest results
 
-I ran a backtest over 2022–2024 using 10 symbols (AAPL, MSFT, NVDA, TSLA, META, AMZN, GOOGL, AMD, SPY, QQQ), starting with $100,000, risking 2% per trade, and targeting a 2.5:1 reward-to-risk ratio. This period covers the full 2022 bear market and the 2023–2024 recovery, so it isn't cherry-picked.
+The models are trained on up to 10 years of daily data across 150 symbols. To show how the strategy performs end-to-end, here is a sample backtest run on 10 large-cap symbols over 2022–2024 — a period that includes the full 2022 bear market and the 2023–2024 recovery, so it covers both a losing and a winning environment.
+
+Configuration: $100,000 starting capital, 2% portfolio risk per trade, 2.5:1 reward-to-risk ratio.
 
 | Metric | Result |
 |---|---|
@@ -65,7 +67,7 @@ I ran a backtest over 2022–2024 using 10 symbols (AAPL, MSFT, NVDA, TSLA, META
 | Max Drawdown | -35.1% (2022 bear) |
 | Win Rate | 29.4% across 211 trades |
 
-You can reproduce these numbers yourself:
+You can run this yourself with any symbols or date range:
 
 ```python
 from backtest.runner import BacktestRunner
@@ -140,9 +142,9 @@ If you want to connect real money, you can add Alpaca API keys to `.env` and it 
 
 ## Model performance
 
-The models were trained on 146 symbols using 10 years of daily data. The test set is the last 15% of each symbol's history — never seen during training.
+The universe has 150 symbols (100 US equities + 50 forex pairs). Each model is trained on up to 10 years of daily data per symbol, with the last 15% of each symbol's history held out as the test set — never seen during training. 146 of the 150 symbols have a fully trained pipeline; 4 were skipped due to insufficient price history.
 
-Top performers on the test set:
+Top performers on the held-out test set:
 
 | Symbol | Best Model | Accuracy | Hit@80 | Tier |
 |---|---|---|---|---|
@@ -155,7 +157,7 @@ Top performers on the test set:
 
 Hit@80 means accuracy only on predictions where the model's confidence was 80% or higher.
 
-Overall averages across all 146 symbols:
+Overall averages across all 146 trained symbols:
 
 | Model | Avg Accuracy | Avg AUC | Tier S symbols | Tier A symbols |
 |---|---|---|---|---|
