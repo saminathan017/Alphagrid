@@ -37,7 +37,7 @@ That's it. The server starts on http://localhost:8080.
 
 Or manually:
 
-    git clone https://github.com/yourusername/alphagrid.git
+    git clone https://github.com/saminathan017/Alphagrid.git
     cd alphagrid
     docker compose up          # pulls, builds, and starts in one command
 
@@ -48,7 +48,7 @@ Or manually:
 Quick Start (Local)
 ═══════════════════
 
-    git clone https://github.com/yourusername/alphagrid.git
+    git clone https://github.com/saminathan017/Alphagrid.git
     cd alphagrid
 
     python -m venv venv
@@ -317,7 +317,7 @@ Project Structure
     |                     alpha engine, signal filter, position sizer, sentiment
     |- strategies/        40+ Numba-JIT indicators, day and swing trading strategies
     |- dashboard/         FastAPI server, WebSocket, 7-page SPA frontend
-    |- execution/         Broker integration (Alpaca, OANDA, Robinhood, paper trader)
+    |- execution/         Broker integration (Alpaca paper + live, paper trader built-in)
     |- backtest/          Walk-forward backtesting engine and metrics
     |- risk/              Kelly sizing and portfolio constraints
     |- scripts/           Training pipeline, cloud bootstrap, monitor, backtest runner
