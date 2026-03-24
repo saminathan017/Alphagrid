@@ -251,7 +251,7 @@ alphagrid/
 │   └── strategy_lab.py     ← Strategy research
 │
 ├── execution/
-│   ├── broker_manager.py   ← Alpaca / OANDA / Robinhood / Paper
+│   ├── broker_manager.py   ← Alpaca broker + paper trader
 │   ├── alpaca_broker.py    ← Alpaca REST + WebSocket
 │   └── paper_trader.py     ← Paper trading simulator
 │
@@ -346,7 +346,7 @@ bash dashboard/run.sh
 
 **yfinance data is empty on first run**
 ```bash
-# Normal — 200 symbols downloading in background takes ~10–15 min
+# Normal — 150 symbols — priority symbols load in ~15 seconds, rest in background
 # Check progress:
 curl http://localhost:8080/api/history/status
 ```

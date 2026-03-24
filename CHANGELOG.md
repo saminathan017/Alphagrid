@@ -1,11 +1,57 @@
 # Changelog
 
 All notable changes to AlphaGrid are documented here.
-Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [v7] — 2026
+## [v7.1] — 2026-03-23
+
+### Added
+- **Live demo** — one-click "Try Live Demo" button on login page (no sign-up)
+- **Demo account** — `demo` / `demo1234` seeded automatically on startup (Trader role)
+- **⚡ FIRE button** — every signal card now executes a real paper trade with qty input
+- **Overview panels** — Holdings (positions + allocation %), Top Movers (live gainers/losers), Top Signals (top 12 by confidence)
+- **Drawdown curve, Risk Limits, Position Exposure** moved from Risk page into Overview
+- **Symbol autocomplete** on Chart page — alphabetical, keyboard navigation, prefix highlight
+- **Cumulative P&L per Trade** bar chart on Trades page (replaces duplicate equity curve)
+- **Backtest results** — +56% total return, 17.3% CAGR, 0.56 Sharpe over 2022–2024
+- **Dockerfile** (python:3.11-slim, no GPU) for lightweight serving
+- **docker-compose.yml** — one-command local deployment with persistent volumes
+- **railway.json** — Railway deployment config (auto-detects Dockerfile, healthcheck)
+- **render.yaml** — Render web service config with persistent disk
+- **Procfile** — Heroku / generic PaaS fallback
+- **.dockerignore** — excludes venv/, local DB, .env from Docker image
+
+### Changed
+- Overview: removed System Log panel; removed Live Signals mini panel (redundant with Signals page)
+- Signals page: removed Ensemble Score and Strategy Distribution charts; raised limit to 200
+- Chart page: fixed interval selector (Daily/1H/15M/5M) not applying on change; fixed intraday data fetching to bypass parquet cache and call yfinance directly
+- Risk page removed from sidebar — content merged into Overview
+- Signal caps removed from WebSocket tick and snapshot broadcasts
+- `app.py` default signal limit raised from 20 to 500
+- Login page: removed exposed default credentials panel (security fix)
+- Login page: replaced "Multi-broker execution — Alpaca, OANDA, Robinhood" with accurate "Paper trading" and "150 assets" bullet points
+- README completely rewritten with live demo link, real backtest numbers, accurate tech stack, deploy guides
+
+### Fixed
+- `bcrypt>=4.0` incompatibility with `passlib` — pinned `bcrypt<4.0` in Dockerfile; broadened exception catch from `ImportError` to `Exception`
+- Local `alphagrid_auth.db` was being baked into Docker image — `.dockerignore` now excludes it; server seeds fresh accounts on every clean deploy
+- Demo password `demo123` was 7 characters (minimum is 8) — changed to `demo1234`
+- Chart endpoint returning HTTP 404 on Railway (no parquet cache) — added live yfinance fallback
+- Price feed loop loading 0 symbols on Railway — added batch yfinance fallback per symbol
+- Cold start time reduced from 5–10 minutes to ~15 seconds — priority 18 symbols now fetched in one `yf.download()` batch call on startup; rest load in background
+
+### Removed
+- Risk page from sidebar navigation (content kept, moved to Overview)
+- Ensemble Score chart from Signals page
+- Strategy Distribution chart from Signals page
+- System Log panel from Overview
+- Live Signals mini panel from Overview
+- Dockerfile.train renamed from Dockerfile (old GPU training image preserved as Dockerfile.train)
+
+---
+
+## [v7.0] — 2026
 
 ### Added
 - LICENSE file (MIT)
@@ -13,18 +59,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - Bumped project version to v7 across all source files and documentation
-- Dockerfile now installs dependencies via `pip install -r requirements.txt` (was
-  duplicating a partial package list inline — this ensures the Docker image gets
-  the full dependency set including FastAPI, SQLAlchemy, auth libraries, and all
-  async networking packages)
-- Removed hardcoded local filesystem paths from `CLOUD_SETUP.md` (was referencing
-  developer's home directory; replaced with `/path/to/alphagrid`)
+- Removed hardcoded local filesystem paths from documentation
 - `SETUP.md` folder references updated from `alphagrid-v6` to `alphagrid`
 
 ### Removed
-- History page from the dashboard (the static historical data browser added visual
-  noise without contributing to signal generation or live trading decisions; all
-  relevant data is surfaced through the Signals, Universe, and Chart pages)
+- History page from the dashboard
 
 ---
 
@@ -49,7 +88,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Regime-conditional LightGBM with volatility state routing
 - MetaLearner stacking over base model out-of-fold predictions
-- Triple-barrier labeling replacing simple next-bar return labels
+- Triple-barrier labelling replacing simple next-bar return labels
 - 7-gate signal filter replacing single confidence threshold
 
 ---
@@ -57,7 +96,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [v4] — 2026
 
 ### Added
-- Broker integration: Alpaca, OANDA, Robinhood, paper trader
+- Alpaca broker integration (paper + live)
+- Paper trading simulator
 - Fractional Kelly position sizing with 3-tier take-profit cascade
 - Portfolio-level risk constraints (sector concentration, gross exposure)
 
