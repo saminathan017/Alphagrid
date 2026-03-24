@@ -8,9 +8,7 @@
 
 AlphaGrid is a quantitative trading dashboard I built that runs a full ML pipeline — three models, a signal filter, and a live WebSocket feed — all from a single server with no mock data, no hardcoded signals, and no API keys needed to get started.
 
----
-
-## Try it live
+Try it live
 
 No sign-up, no setup. Just open the link and log in with the demo account.
 
@@ -20,9 +18,7 @@ https://web-production-bd6aa.up.railway.app
 
 The demo account is read-only (Trader role) with paper trading enabled so you can fire signals and watch the P&L update in real time.
 
----
-
-## Running it locally
+Running it locally
 
 If you have Docker, one command is all it takes:
 
@@ -49,9 +45,7 @@ python -m dashboard.app
 
 No API keys required. All market data comes from yfinance, which is free and works out of the box.
 
----
-
-## Backtest results
+Backtest results
 
 The models are trained on up to 10 years of daily data across 150 symbols. To show how the strategy performs end-to-end, here is a sample backtest run on 10 large-cap symbols over 2022–2024 — a period that includes the full 2022 bear market and the 2023–2024 recovery, so it covers both a losing and a winning environment.
 
@@ -80,9 +74,7 @@ m = result['metrics']
 print(m['total_return_pct'], m['sharpe_ratio'], m['max_drawdown_pct'])
 ```
 
----
-
-## How it works
+How it works
 
 Raw price data comes in from yfinance. From there, it goes through feature engineering (80+ features), into three models that each look at the market differently, then a meta-learner that decides how much to trust each model, and finally a 7-gate filter that rejects anything that doesn't have a real edge. What makes it onto the dashboard are only the signals that cleared every gate.
 
@@ -108,9 +100,7 @@ MetaLearner ─────────── AUC-weighted stacking with degener
 FastAPI Dashboard ─────── live prices · signals · paper trading · WebSocket push
 ```
 
----
-
-## What's in the dashboard
+What's in the dashboard
 
 | Page | What it shows |
 |---|---|
@@ -124,9 +114,7 @@ FastAPI Dashboard ─────── live prices · signals · paper trading 
 
 Prices, signals, and portfolio state are all pushed via WebSocket at `/ws` every 2 seconds.
 
----
-
-## Three features that address real problems in live algo trading
+Three features that address real problems in live algo trading
 
 Most quant dashboards show you a signal and a confidence score and leave it there. You have no idea why the signal fired, whether that strategy has been working recently, or whether the live performance actually matches what you saw in the backtest. These three features were built specifically to fix that.
 
@@ -136,9 +124,7 @@ Strategy decay detection — this is the one most people miss. A strategy that w
 
 Backtest vs live divergence — the hardest problem in algorithmic trading is that backtest performance almost never matches live performance exactly. Overfitting, lookahead bias, transaction costs, and changing market regimes all cause the gap. The Trades page has a comparison panel that tracks your live paper trade metrics — win rate, profit factor, Sharpe, max drawdown, average trade P&L — and compares each one against the backtest reference numbers from the 2022–2024 run. Each metric gets a status: on track, warning, or underperforming. There's also a rolling 10-trade win rate chart with the backtest baseline drawn as a reference line, so you can see whether performance is converging or diverging over time.
 
----
-
-## Paper trading
+Paper trading
 
 Every signal card has a Fire button. Here's how to use it:
 
@@ -150,9 +136,7 @@ Every signal card has a Fire button. Here's how to use it:
 
 If you want to connect real money, you can add Alpaca API keys to `.env` and it routes through there.
 
----
-
-## Model performance
+Model performance
 
 The universe has 150 symbols (100 US equities + 50 forex pairs). Each model is trained on up to 10 years of daily data per symbol, with the last 15% of each symbol's history held out as the test set — never seen during training. 146 of the 150 symbols have a fully trained pipeline; 4 were skipped due to insufficient price history.
 
@@ -180,9 +164,7 @@ Overall averages across all 146 trained symbols:
 
 Near-random average accuracy is completely normal in financial ML. The point isn't to be right on every prediction — it's to be consistently right when confidence is high, which is where the 80–90% accuracy numbers come from.
 
----
-
-## The models
+The models
 
 QuantLSTM starts with a TCN front-end (4 dilated causal convolution blocks, roughly a 30-bar receptive field), feeds into a 3-layer BiLSTM with 512 hidden units, then passes through multi-head attention with 4 heads and temporal pooling. Regularisation includes Mixup, Stochastic Weight Averaging, 8-pass test-time augmentation, and focal loss. Trained with AdamW and cosine learning rate scheduling with warmup, on Apple Silicon MPS or NVIDIA CUDA.
 
@@ -192,9 +174,7 @@ LightGBM DART runs three separate models — one for low volatility regimes, one
 
 MetaLearner stacks the three base models using out-of-fold predictions. If there aren't enough samples, it falls back to AUC-weighted averaging. It also has degeneracy detection — if the LSTM output standard deviation drops below 0.05, that output gets replaced rather than passed forward.
 
----
-
-## Feature engineering
+Feature engineering
 
 Over 80 features, all stationary and winsorised at the 1st and 99th percentile to avoid outlier contamination.
 
@@ -211,9 +191,7 @@ Over 80 features, all stationary and winsorised at the 1st and 99th percentile t
 | Fractal and entropy | Hurst exponent, approximate entropy, run entropy |
 | Labels | Triple-barrier with 2.5x ATR take-profit and 2.0x ATR stop-loss |
 
----
-
-## The 7-gate signal filter
+The 7-gate signal filter
 
 Every signal has to pass all 7 gates before it reaches the dashboard. Most don't make it.
 
@@ -229,9 +207,7 @@ Every signal has to pass all 7 gates before it reaches the dashboard. Most don't
 
 Signals that clear all 7 gates get a 0–100 conviction score, a fractional Kelly position size, and a 3-tier take-profit cascade at 1.0x, 2.0x, and 3.5x ATR.
 
----
-
-## Asset universe
+Asset universe
 
 150 symbols in total, all pulled from yfinance — no API key needed.
 
@@ -239,9 +215,7 @@ Signals that clear all 7 gates get a 0–100 conviction score, a fractional Kell
 
 50 forex pairs covering majors, minors, EM exotics, gold, and silver.
 
----
-
-## Deploying it yourself
+Deploying it yourself
 
 On Railway (takes about 2 minutes):
 1. Fork the repo on GitHub
@@ -265,9 +239,7 @@ Environment variables:
 | `ALPACA_API_KEY` | — | Only needed for live trading |
 | `ALPACA_SECRET_KEY` | — | Only needed for live trading |
 
----
-
-## Retraining the models
+Retraining the models
 
 Training all 150 symbols from scratch on a MacBook takes 6–12 hours. The repo ships with pre-trained checkpoints so signals work on first launch, but if you want to retrain or add new symbols, a bootstrap script provisions an EC2 g4dn.xlarge spot instance for roughly $0.50–$1.50 total.
 
@@ -292,9 +264,7 @@ python scripts/train_models.py --symbols AAPL,MSFT,NVDA  # specific symbols
 python scripts/train_models.py --symbols AAPL --quick    # about 5 minutes
 ```
 
----
-
-## Project structure
+Project structure
 
 ```
 Alphagrid/
@@ -320,9 +290,7 @@ Alphagrid/
 └── .env.example        Environment variable template
 ```
 
----
-
-## Tech stack
+Tech stack
 
 | Layer | What I used |
 |---|---|
@@ -335,9 +303,7 @@ Alphagrid/
 | Training | Apple Silicon MPS, NVIDIA CUDA 12.1 |
 | Cloud | Railway, Render, AWS EC2 g4dn |
 
----
-
-## A few design decisions worth explaining
+A few design decisions worth explaining
 
 Why triple-barrier labels? Simple next-bar return labels hit a ceiling around 52% accuracy because the labels are too noisy — a lot of the "moves" are just noise. Triple-barrier labels only mark bars where a real, measurable move happened in either direction, which pushes accuracy on labeled samples from 52% up to 65–90% depending on the symbol.
 
@@ -355,14 +321,10 @@ Why track strategy decay? Every strategy has a shelf life. Market regimes change
 
 Why compare live performance to the backtest? Because the backtest is a promise and live trading is reality. If your live win rate is 18% and the backtest said 29%, something is wrong — maybe overfitting, maybe regime change, maybe execution slippage. Surfacing that gap explicitly forces honest evaluation instead of hoping the numbers will eventually catch up.
 
----
-
-## Disclaimer
+Disclaimer
 
 Paper trading only by default. To enable live trading, add Alpaca credentials to `.env`. This is a research and educational project — past performance does not guarantee future results.
 
----
-
-## License
+License
 
 MIT — see [LICENSE](LICENSE)
