@@ -170,13 +170,13 @@ Near-random average accuracy is completely normal in financial ML. The point isn
 
 ## The models
 
-**QuantLSTM** starts with a TCN front-end (4 dilated causal convolution blocks, roughly a 30-bar receptive field), feeds into a 3-layer BiLSTM with 512 hidden units, then passes through multi-head attention with 4 heads and temporal pooling. Regularisation includes Mixup, Stochastic Weight Averaging, 8-pass test-time augmentation, and focal loss. Trained with AdamW and cosine learning rate scheduling with warmup, on Apple Silicon MPS or NVIDIA CUDA.
+QuantLSTM starts with a TCN front-end (4 dilated causal convolution blocks, roughly a 30-bar receptive field), feeds into a 3-layer BiLSTM with 512 hidden units, then passes through multi-head attention with 4 heads and temporal pooling. Regularisation includes Mixup, Stochastic Weight Averaging, 8-pass test-time augmentation, and focal loss. Trained with AdamW and cosine learning rate scheduling with warmup, on Apple Silicon MPS or NVIDIA CUDA.
 
-**FinancialTransformer** is a 6-layer encoder with 8 attention heads and d_model=256. It uses Pre-LayerNorm so it stays stable on the relatively small financial datasets we're working with, and Rotary Positional Encoding (RoPE) for better temporal generalisation than standard learned embeddings.
+FinancialTransformer is a 6-layer encoder with 8 attention heads and d_model=256. It uses Pre-LayerNorm so it stays stable on the relatively small financial datasets we're working with, and Rotary Positional Encoding (RoPE) for better temporal generalisation than standard learned embeddings.
 
-**LightGBM DART** runs three separate models — one for low volatility regimes, one for medium, one for high. DART boosting keeps it from overfitting, and monotone constraints bake in some economic common sense. At inference time, the system looks at the current regime and routes to the matching model.
+LightGBM DART runs three separate models — one for low volatility regimes, one for medium, one for high. DART boosting keeps it from overfitting, and monotone constraints bake in some economic common sense. At inference time, the system looks at the current regime and routes to the matching model.
 
-**MetaLearner** stacks the three base models using out-of-fold predictions. If there aren't enough samples, it falls back to AUC-weighted averaging. It also has degeneracy detection — if the LSTM output standard deviation drops below 0.05, that output gets replaced rather than passed forward.
+MetaLearner stacks the three base models using out-of-fold predictions. If there aren't enough samples, it falls back to AUC-weighted averaging. It also has degeneracy detection — if the LSTM output standard deviation drops below 0.05, that output gets replaced rather than passed forward.
 
 ---
 
@@ -229,19 +229,19 @@ Signals that clear all 7 gates get a 0–100 conviction score, a fractional Kell
 
 ## Deploying it yourself
 
-**On Railway** (takes about 2 minutes):
+On Railway (takes about 2 minutes):
 1. Fork the repo on GitHub
 2. Go to railway.app, create a new project, and deploy from your fork
 3. Add `ALPHAGRID_JWT_SECRET` as an environment variable (any random string works)
 4. Deploy — Railway auto-detects the Dockerfile
 
-**On Render:**
+On Render:
 1. Fork the repo
 2. Go to render.com, create a new web service, and connect your fork
 3. Render picks up `render.yaml` automatically
 4. Add `ALPHAGRID_JWT_SECRET` and deploy
 
-**Environment variables:**
+Environment variables:
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -325,15 +325,15 @@ Alphagrid/
 
 ## A few design decisions worth explaining
 
-**Why triple-barrier labels?** Simple next-bar return labels hit a ceiling around 52% accuracy because the labels are too noisy — a lot of the "moves" are just noise. Triple-barrier labels only mark bars where a real, measurable move happened in either direction, which pushes accuracy on labeled samples from 52% up to 65–90% depending on the symbol.
+Why triple-barrier labels? Simple next-bar return labels hit a ceiling around 52% accuracy because the labels are too noisy — a lot of the "moves" are just noise. Triple-barrier labels only mark bars where a real, measurable move happened in either direction, which pushes accuracy on labeled samples from 52% up to 65–90% depending on the symbol.
 
-**Why regime-conditional LightGBM?** A strategy that works well in a low-volatility trending market falls apart in a high-volatility mean-reverting one. Running three separate models — one per volatility regime — and routing inference to the right one consistently beats a single global model.
+Why regime-conditional LightGBM? A strategy that works well in a low-volatility trending market falls apart in a high-volatility mean-reverting one. Running three separate models — one per volatility regime — and routing inference to the right one consistently beats a single global model.
 
-**Why a meta-learner?** The LSTM is good at temporal dependencies. The Transformer catches long-range patterns. LightGBM handles tabular snapshot features better than either. No single model wins everywhere, so the meta-learner learns when to trust each one.
+Why a meta-learner? The LSTM is good at temporal dependencies. The Transformer catches long-range patterns. LightGBM handles tabular snapshot features better than either. No single model wins everywhere, so the meta-learner learns when to trust each one.
 
-**Why 7 gates?** A model that's right 70% of the time is useless if you act on every prediction. The filter selects the 5–15% of signals that have genuine edge — that subset is where you see 80–90% accuracy.
+Why 7 gates? A model that's right 70% of the time is useless if you act on every prediction. The filter selects the 5–15% of signals that have genuine edge — that subset is where you see 80–90% accuracy.
 
-**Why ship pre-trained models?** Retraining from scratch takes 6–12 hours and needs a GPU. Shipping the checkpoints means real ML signals are live on the first launch with no waiting and no hardware requirements.
+Why ship pre-trained models? Retraining from scratch takes 6–12 hours and needs a GPU. Shipping the checkpoints means real ML signals are live on the first launch with no waiting and no hardware requirements.
 
 ---
 
