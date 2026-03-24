@@ -115,14 +115,26 @@ FastAPI Dashboard ─────── live prices · signals · paper trading 
 | Page | What it shows |
 |---|---|
 | Overview | Portfolio P&L, equity curve, live holdings, top movers, top signals, drawdown curve, risk limits |
-| Signals | All ML and TA signals with confidence, entry, TP, and SL — click Fire to execute as a paper trade |
+| Signals | ML and TA signals with confidence, entry, TP, SL, reason pills, R/R ratio, and strategy health panel |
 | Chart | Interactive OHLCV chart with 40+ indicators, symbol search, Daily / 1H / 15M / 5M timeframes |
-| Trades | Open and closed positions with real P&L and cumulative P&L chart |
+| Trades | Open and closed positions, P&L chart, and live vs backtest divergence tracker |
 | Universe | Live prices across 150 symbols, updated every 5 seconds, fully sortable |
 | Models | Per-symbol model performance, Tier ratings (S through D), calibration stats |
 | Broker | Paper trading account, order routing, current account state |
 
 Prices, signals, and portfolio state are all pushed via WebSocket at `/ws` every 2 seconds.
+
+---
+
+## Three features that address real problems in live algo trading
+
+Most quant dashboards show you a signal and a confidence score and leave it there. You have no idea why the signal fired, whether that strategy has been working recently, or whether the live performance actually matches what you saw in the backtest. These three features were built specifically to fix that.
+
+Signal explainability — every signal card now shows the exact reasons it was generated: which indicators triggered it (RSI oversold, MACD cross, ADX trend confirmed, Bollinger squeeze, etc.), the reward-to-risk ratio, the stop-loss and take-profit as a percentage of entry, and the strategy name. You can look at a signal and immediately understand what the market is doing and why the system thinks it has edge, rather than just trusting a number.
+
+Strategy decay detection — this is the one most people miss. A strategy that worked for the past 6 months can start failing quietly and you won't notice until the losses pile up. The Signals page has a Strategy Health panel that tracks every actionable signal as a pending outcome, then checks whether price moved in the predicted direction after 1 day (for day trades) or 5 days (for swing trades). For each strategy it shows a rolling win rate, a dot sparkline of recent results, and a trend indicator — improving, stable, or declining. If a strategy's live accuracy drops below 50% it flags as warning, below 40% it goes critical. You see it happening in real time before it costs you.
+
+Backtest vs live divergence — the hardest problem in algorithmic trading is that backtest performance almost never matches live performance exactly. Overfitting, lookahead bias, transaction costs, and changing market regimes all cause the gap. The Trades page has a comparison panel that tracks your live paper trade metrics — win rate, profit factor, Sharpe, max drawdown, average trade P&L — and compares each one against the backtest reference numbers from the 2022–2024 run. Each metric gets a status: on track, warning, or underperforming. There's also a rolling 10-trade win rate chart with the backtest baseline drawn as a reference line, so you can see whether performance is converging or diverging over time.
 
 ---
 
@@ -336,6 +348,12 @@ Why a meta-learner? The LSTM is good at temporal dependencies. The Transformer c
 Why 7 gates? A model that's right 70% of the time is useless if you act on every prediction. The filter selects the 5–15% of signals that have genuine edge — that subset is where you see 80–90% accuracy.
 
 Why ship pre-trained models? Retraining from scratch takes 6–12 hours and needs a GPU. Shipping the checkpoints means real ML signals are live on the first launch with no waiting and no hardware requirements.
+
+Why show signal reasons instead of just confidence? A confidence score of 73% tells you nothing actionable. Knowing the signal fired because RSI hit 28, ADX is above 25, and MACD just crossed positive gives you something you can actually evaluate and disagree with. It also makes the system auditable — if a signal is wrong, you can trace back exactly what the model was seeing.
+
+Why track strategy decay? Every strategy has a shelf life. Market regimes change, correlations break down, and what worked in a trending environment stops working in a choppy one. Without explicit tracking, decay is invisible until your account is already down. Monitoring the rolling accuracy per strategy means you can rotate out of failing strategies before the damage compounds.
+
+Why compare live performance to the backtest? Because the backtest is a promise and live trading is reality. If your live win rate is 18% and the backtest said 29%, something is wrong — maybe overfitting, maybe regime change, maybe execution slippage. Surfacing that gap explicitly forces honest evaluation instead of hoping the numbers will eventually catch up.
 
 ---
 
