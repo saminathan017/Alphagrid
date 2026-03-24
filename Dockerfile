@@ -18,7 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir \
     numpy pandas scipy yfinance alpaca-py \
     fastapi "uvicorn[standard]" pydantic python-multipart \
-    sqlalchemy "passlib[bcrypt]" "python-jose[cryptography]" \
+    sqlalchemy "passlib[bcrypt]" "bcrypt<4.0" "python-jose[cryptography]" \
     lightgbm scikit-learn imbalanced-learn \
     aiohttp httpx requests websockets \
     loguru pyyaml python-dotenv python-dateutil pytz

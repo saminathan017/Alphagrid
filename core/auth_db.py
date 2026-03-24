@@ -41,7 +41,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 try:
     from jose import JWTError, jwt as _jose_jwt
     JOSE_OK = True
-except ImportError:
+except Exception:
     JOSE_OK = False
     logger.warning("python-jose not installed — run: pip install python-jose[cryptography]")
 
@@ -50,10 +50,10 @@ try:
     from passlib.context import CryptContext
     _pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
     PASSLIB_OK = True
-except ImportError:
+except Exception:
     PASSLIB_OK = False
     _pwd_ctx   = None
-    logger.warning("passlib not installed — run: pip install passlib[bcrypt]")
+    logger.warning("passlib/bcrypt unavailable — install: passlib[bcrypt] bcrypt<4.0")
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
