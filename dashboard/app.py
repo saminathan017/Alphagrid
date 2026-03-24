@@ -503,6 +503,20 @@ async def price_feed_loop():
                         df = await asyncio.get_event_loop().run_in_executor(
                             None, lambda s=sym: _yf_history(s, "10y", "1d")
                         )
+                        # Fallback: fetch live from yfinance if parquet cache is missing
+                        if df.empty:
+                            def _live_fetch(s=sym):
+                                try:
+                                    tk = yf.Ticker(s)
+                                    d = tk.history(period="1y", interval="1d", auto_adjust=True)
+                                    if d.empty:
+                                        return pd.DataFrame()
+                                    d.columns = [c.lower() for c in d.columns]
+                                    d.index = pd.to_datetime(d.index, utc=True)
+                                    return d[["open","high","low","close","volume"]].dropna()
+                                except Exception:
+                                    return pd.DataFrame()
+                            df = await asyncio.get_event_loop().run_in_executor(None, _live_fetch)
                         if not df.empty:
                             state.candles[sym] = df
                     await asyncio.sleep(0.5)
@@ -1863,6 +1877,23 @@ async def get_chart_data(
             df = await asyncio.get_event_loop().run_in_executor(
                 None, lambda: _yf_history(sym, period, interval)
             )
+            if df is not None and not df.empty:
+                state.candles[sym] = df
+        # Fallback: fetch live from yfinance if parquet cache is unavailable (e.g. fresh deploy)
+        if df is None or len(df) < 10:
+            def _fetch_daily():
+                try:
+                    tk = yf.Ticker(sym)
+                    d = tk.history(period=period or "1y", interval="1d", auto_adjust=True)
+                    if d.empty:
+                        return pd.DataFrame()
+                    d.columns = [c.lower() for c in d.columns]
+                    d.index = pd.to_datetime(d.index, utc=True)
+                    return d[["open","high","low","close","volume"]].dropna()
+                except Exception as e:
+                    logger.warning(f"yfinance daily fallback failed {sym}: {e}")
+                    return pd.DataFrame()
+            df = await asyncio.get_event_loop().run_in_executor(None, _fetch_daily)
             if df is not None and not df.empty:
                 state.candles[sym] = df
 
