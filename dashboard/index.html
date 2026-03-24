@@ -1108,6 +1108,20 @@ input, select, textarea { font-family: inherit; }
 .sc-reason-pill { font-size: 8.5px; font-family: var(--font-mono); font-weight: 500; padding: 2px 7px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--t2); border: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
 .sc-why       { font-size: 8px; color: var(--t3); font-family: var(--font-body); margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
 .sc-why span  { display: flex; align-items: center; gap: 3px; }
+.decay-row    { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.decay-row:last-child { border-bottom:none; }
+.decay-name   { font-size:9px; font-family:var(--font-mono); color:var(--t2); min-width:140px; }
+.decay-bar    { flex:1; height:4px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden; }
+.decay-fill   { height:100%; border-radius:2px; transition:width .4s; }
+.decay-wr     { font-size:9px; font-family:var(--font-mono); color:var(--t1); min-width:36px; text-align:right; }
+.decay-status { font-size:8px; font-family:var(--font-body); font-weight:600; padding:1px 6px; border-radius:8px; min-width:64px; text-align:center; }
+.ds-healthy   { background:rgba(0,255,200,.12); color:var(--green); }
+.ds-warning   { background:rgba(255,180,0,.12);  color:#ffb400; }
+.ds-critical  { background:rgba(255,51,102,.12); color:var(--red); }
+.ds-warming   { background:rgba(255,255,255,.06); color:var(--t3); }
+.decay-dots   { display:flex; gap:2px; }
+.decay-dot    { width:6px; height:6px; border-radius:50%; }
+.decay-trend  { font-size:8px; font-family:var(--font-mono); min-width:20px; text-align:center; }
 .skel         { background: rgba(255,255,255,.04); border-radius: var(--r-sm); animation: skelPulse 1.4s ease infinite; }
 .skel-line    { height: 14px; margin-bottom: 6px; }
 .skel-block   { height: 60px; }
@@ -1344,6 +1358,25 @@ input, select, textarea { font-family: inherit; }
 </div>
 
 <div class="page" id="pg-signals">
+
+  <!-- Strategy Health Panel -->
+  <div class="panel" style="margin-bottom:12px" id="decay-panel">
+    <div class="ph" style="cursor:pointer" onclick="toggleDecayPanel()">
+      <span class="pt">Strategy Health</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="decay-overall" style="font-size:9px;font-family:var(--font-mono);color:var(--t3)">loading…</span>
+        <span style="font-size:9px;color:var(--t3)">▾</span>
+      </div>
+    </div>
+    <div class="pb2" id="decay-body">
+      <div id="decay-rows" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div style="font-size:8px;color:var(--t4);font-family:var(--font-body);margin-top:8px">
+        Tracks whether each strategy's signals moved price in the predicted direction after 1 day (day) or 5 days (swing). Needs 10+ resolved signals per strategy.
+      </div>
+    </div>
+  </div>
+
+  <!-- Signals -->
   <div class="panel" style="margin-bottom:12px">
     <div class="ph">
       <span class="pt">Generated Signals — <span id="sig-mode-lbl">Day Trading</span></span>
@@ -2167,6 +2200,60 @@ async function renderSignalsPage() {
     ? displaySigs.map(sigCard).join('')
     : `<div style="color:var(--t3);font-family:var(--font-body);font-size:11px;padding:12px">No signals yet — strategy engine is running on cached candle data. Check System tab for status.</div>`;
   $('sig-all-count').textContent = displaySigs.filter(s=>s.is_actionable).length + ' actionable';
+
+  renderDecayPanel();
+}
+
+function toggleDecayPanel() {
+  const body = $('decay-body');
+  if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+async function renderDecayPanel() {
+  const data = await apiFetch('/api/decay').catch(() => null);
+  if (!data) return;
+
+  const overall = $('decay-overall');
+  const rows    = $('decay-rows');
+  if (!overall || !rows) return;
+
+  const pct = (data.overall_win_rate * 100).toFixed(0);
+  const pendingTxt = data.pending > 0 ? ` · ${data.pending} pending` : '';
+  overall.textContent = data.total_resolved > 0
+    ? `overall ${pct}% accuracy · ${data.total_resolved} resolved${pendingTxt}`
+    : `${data.pending} signals pending resolution (check back in 1–5 days)`;
+
+  if (!data.strategies.length) {
+    rows.innerHTML = `<div style="font-size:9px;color:var(--t3);font-family:var(--font-body);padding:4px 0">
+      Signals are being tracked. Results appear after 1 day (day mode) or 5 days (swing mode).
+    </div>`;
+    return;
+  }
+
+  const statusClass = { healthy:'ds-healthy', warning:'ds-warning', critical:'ds-critical', warming_up:'ds-warming' };
+  const statusLabel = { healthy:'healthy', warning:'warning', critical:'decaying', warming_up:'warming up' };
+  const trendIcon   = { improving:'↑', declining:'↓', stable:'→' };
+  const trendColor  = { improving:'var(--green)', declining:'var(--red)', stable:'var(--t3)' };
+
+  rows.innerHTML = data.strategies.map(s => {
+    const wr   = (s.win_rate * 100).toFixed(0);
+    const fill = s.status === 'warming_up' ? 'rgba(255,255,255,.2)'
+               : s.win_rate >= 0.55 ? 'var(--green)'
+               : s.win_rate >= 0.45 ? '#ffb400'
+               : 'var(--red)';
+    const dots = (s.recent || []).map(r =>
+      `<div class="decay-dot" style="background:${r.correct===true?'var(--green)':r.correct===false?'var(--red)':'rgba(255,255,255,.15)'}"></div>`
+    ).join('');
+    const name = s.strategy.replace(/_/g,' ');
+    return `<div class="decay-row">
+      <span class="decay-name">${name}</span>
+      <div class="decay-dots">${dots}</div>
+      <div class="decay-bar"><div class="decay-fill" style="width:${Math.min(+wr,100)}%;background:${fill}"></div></div>
+      <span class="decay-wr">${s.total >= 10 ? wr+'%' : s.total+' sig'}</span>
+      <span class="decay-trend" style="color:${trendColor[s.trend]||'var(--t3)'}">${trendIcon[s.trend]||'→'}</span>
+      <span class="decay-status ${statusClass[s.status]||'ds-warming'}">${statusLabel[s.status]||s.status}</span>
+    </div>`;
+  }).join('');
 }
 
 async function refreshSignals() {

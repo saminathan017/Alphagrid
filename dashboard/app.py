@@ -169,6 +169,7 @@ class AppState:
         self.candles:  dict[str, pd.DataFrame] = {}  # symbol → OHLCV df
         self.signals:  dict[str, list[dict]]   = {"day": [], "swing": []}  # mode → signals
         self.signals_json_cache: dict[str, bytes] = {}  # pre-serialized JSON for fast GET
+        self.signal_outcomes: deque = deque(maxlen=1000)  # decay tracking: pending + resolved outcomes
         self.trades:   list[dict]              = []   # paper trades log
         self.equity_curve: list[dict]          = []  # daily snapshots
         self.portfolio: dict                   = {
@@ -414,9 +415,60 @@ def _run_signals(symbols: list[str], mode: TradingMode) -> list[dict]:
                     if live_p:
                         d["entry"] = live_p
                 results.append(d)
+                # Record as pending outcome for decay detection
+                _record_signal_outcome(d)
         except Exception as e:
             logger.debug(f"Signal fail {sym}: {e}")
     return results
+
+
+def _record_signal_outcome(sig: dict) -> None:
+    """Add a new actionable signal as a pending outcome for decay tracking."""
+    if not sig.get("is_actionable"):
+        return
+    strategy = sig.get("strategy", "unknown")
+    symbol   = sig.get("symbol", "")
+    # Deduplicate: skip if same symbol+strategy was recorded in the last 4 hours
+    cutoff = time.time() - 4 * 3600
+    for existing in state.signal_outcomes:
+        if (existing["symbol"] == symbol
+                and existing["strategy"] == strategy
+                and existing["recorded_at"] > cutoff
+                and not existing["resolved"]):
+            return
+    # Resolve after 1 day for day signals, 5 days for swing
+    mode = sig.get("mode", "day")
+    resolve_hours = 24 if "day" in str(mode).lower() else 5 * 24
+    state.signal_outcomes.appendleft({
+        "symbol":      symbol,
+        "direction":   sig.get("direction", "FLAT"),
+        "entry":       sig.get("entry") or sig.get("entry_price") or 0,
+        "strategy":    strategy,
+        "mode":        mode,
+        "recorded_at": time.time(),
+        "resolve_at":  time.time() + resolve_hours * 3600,
+        "resolved":    False,
+        "correct":     None,
+        "exit_price":  None,
+    })
+
+
+def _resolve_signal_outcomes() -> None:
+    """Check pending outcomes whose resolve time has passed and mark correct/incorrect."""
+    now = time.time()
+    for outcome in state.signal_outcomes:
+        if outcome["resolved"] or now < outcome["resolve_at"]:
+            continue
+        sym = outcome["symbol"]
+        current = state.prices.get(sym, {}).get("price")
+        entry   = outcome["entry"]
+        if not current or not entry or entry <= 0:
+            continue
+        direction = outcome["direction"]
+        outcome["correct"]     = (current > entry) if direction == "LONG" else (current < entry)
+        outcome["exit_price"]  = current
+        outcome["resolved"]    = True
+        outcome["resolved_at"] = now
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -622,6 +674,9 @@ async def price_feed_loop():
 
             # Update portfolio unrealised P&L from open positions
             _update_portfolio_pnl()
+
+            # Resolve pending signal outcomes for decay detection
+            _resolve_signal_outcomes()
 
             # Run Robinhood software SL/TP monitoring (RH has no native bracket orders)
             if broker_manager:
@@ -933,6 +988,79 @@ async def get_signals(
 @app.get("/api/signals/history")
 async def get_signal_history(limit: int = 100):
     return list(state.signal_history)[:limit]
+
+
+@app.get("/api/decay")
+async def get_decay():
+    """
+    Per-strategy decay report.
+    Tracks whether each strategy's signals have been directionally correct
+    over a rolling window, flagging strategies whose accuracy is declining.
+    """
+    resolved = [o for o in state.signal_outcomes if o.get("resolved")]
+
+    # Group by strategy
+    by_strategy: dict[str, list] = {}
+    for o in resolved:
+        strat = o.get("strategy", "unknown")
+        by_strategy.setdefault(strat, []).append(o)
+
+    strategies = []
+    for strat, records in sorted(by_strategy.items()):
+        records.sort(key=lambda x: x.get("resolved_at", 0))
+        last30 = records[-30:]
+        wins   = sum(1 for r in last30 if r.get("correct"))
+        total  = len(last30)
+        win_rate = wins / total if total else 0.0
+
+        # Trend: last 10 vs prior 10
+        trend = "stable"
+        if total >= 20:
+            prior_wr  = sum(1 for r in last30[-20:-10] if r.get("correct")) / 10
+            recent_wr = sum(1 for r in last30[-10:]    if r.get("correct")) / 10
+            if recent_wr > prior_wr + 0.08:
+                trend = "improving"
+            elif recent_wr < prior_wr - 0.08:
+                trend = "declining"
+
+        # Recent 10 outcomes as win/loss dots for sparkline
+        recent_dots = [
+            {"correct": r.get("correct"), "symbol": r["symbol"]}
+            for r in last30[-10:]
+        ]
+
+        if total < 10:
+            status = "warming_up"
+        elif win_rate < 0.40:
+            status = "critical"
+        elif win_rate < 0.50:
+            status = "warning"
+        else:
+            status = "healthy"
+
+        strategies.append({
+            "strategy":  strat,
+            "win_rate":  round(win_rate, 3),
+            "wins":      wins,
+            "total":     total,
+            "trend":     trend,
+            "status":    status,
+            "recent":    recent_dots,
+        })
+
+    total_resolved = len(resolved)
+    overall_wr = (
+        sum(1 for o in resolved if o.get("correct")) / total_resolved
+        if total_resolved else 0.0
+    )
+    pending = sum(1 for o in state.signal_outcomes if not o.get("resolved"))
+
+    return {
+        "strategies":    strategies,
+        "total_resolved": total_resolved,
+        "pending":        pending,
+        "overall_win_rate": round(overall_wr, 3),
+    }
 
 
 @app.post("/api/signals/refresh")
