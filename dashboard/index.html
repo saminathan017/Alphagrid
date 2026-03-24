@@ -2705,8 +2705,13 @@ let _chartSym = 'AAPL';
 (function() {
   let _acIdx = -1;
 
+  const _AC_FALLBACK = [
+    'AAPL','AMD','AMZN','COIN','CRWD','EURUSD=X','GBPUSD=X','GOOGL','JPM',
+    'META','MSFT','NFLX','NVDA','PLTR','QQQ','SOFI','SPY','TSLA','USDTRY=X','ZS'
+  ];
   function getSymbols() {
-    return Object.keys(S.prices).sort();
+    const fromPrices = Object.keys(S.prices).sort();
+    return fromPrices.length ? fromPrices : _AC_FALLBACK;
   }
 
   function showList(items, query) {
@@ -2803,7 +2808,10 @@ async function loadChart() {
   const interval = $('chart-interval').value;
   _chartSym = sym;
   $('chart-sym-label').textContent = sym;
+  $('chart-price-label').textContent = '…';
+  $('chart-chg-label').textContent = '';
   $('chart-status').textContent = 'Loading…';
+  $('chart-main').style.opacity = '0.4';
   $('chart-interval-badge').textContent = {
     '1d':'Daily','1h':'1H','15m':'15M','5m':'5M'
   }[interval] || interval;
@@ -2814,17 +2822,21 @@ async function loadChart() {
 
     // Update live price header
     if (data.latest_price) {
-      $('chart-price-label').textContent = (+data.latest_price).toFixed(4);
+      const p = +data.latest_price;
+      $('chart-price-label').textContent = p >= 10 ? p.toFixed(2) : p.toFixed(4);
       const chg = data.change_pct || 0;
       const el = $('chart-chg-label');
       el.textContent = (chg >= 0 ? '▲+' : '▼') + chg.toFixed(2) + '%';
       el.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
     }
 
+    $('chart-main').style.opacity = '1';
     $('chart-status').textContent = `${data.candles.length} bars`;
     renderLightweightChart(data);
     log('info', `Chart loaded: ${sym} — ${data.candles.length} bars, ${Object.keys(data.overlays||{}).length} overlays, ${(data.markers||[]).length} signals`);
   } catch(e) {
+    $('chart-main').style.opacity = '1';
+    $('chart-price-label').textContent = '—';
     $('chart-status').textContent = 'Error: ' + e.message;
     log('error', `Chart error: ${e.message}`);
   }

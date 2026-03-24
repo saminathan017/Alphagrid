@@ -2099,6 +2099,16 @@ async def get_chart_data(
             "text":     direction,
         })
 
+    # Use live price if available, otherwise fall back to last candle close
+    _p = state.prices.get(sym, {})
+    _latest_price = _p.get("price")
+    _change_pct   = _p.get("change_pct")
+    if not _latest_price and not df.empty:
+        _latest_price = round(float(df["close"].iloc[-1]), 4)
+        if len(df) >= 2:
+            _prev = float(df["close"].iloc[-2])
+            _change_pct = round((_latest_price - _prev) / _prev * 100, 3) if _prev else 0.0
+
     return {
         "symbol":   sym,
         "interval": interval,
@@ -2106,8 +2116,8 @@ async def get_chart_data(
         "volume":   volume_series,
         "overlays": overlays,
         "markers":  markers,
-        "latest_price": state.prices.get(sym, {}).get("price"),
-        "change_pct":   state.prices.get(sym, {}).get("change_pct"),
+        "latest_price": _latest_price,
+        "change_pct":   _change_pct,
     }
 
 
