@@ -408,6 +408,11 @@ def _run_signals(symbols: list[str], mode: TradingMode) -> list[dict]:
                     d["atr"] = inds.get("atr_14")
                     d["bb_pos"] = inds.get("bb_pos")
                     d["supertrend_dir"] = inds.get("supertrend_dir")
+                # Attach live price as entry if missing
+                if not d.get("entry") or d["entry"] == 0:
+                    live_p = state.prices.get(sym, {}).get("price")
+                    if live_p:
+                        d["entry"] = live_p
                 results.append(d)
         except Exception as e:
             logger.debug(f"Signal fail {sym}: {e}")

@@ -1104,7 +1104,10 @@ input, select, textarea { font-family: inherit; }
 .exec-n       { font-size: 9px; font-family: var(--font-body); padding: 3px 9px; border-radius: 3px; background: rgba(255,255,255,.04); color: var(--t4); }
 .fire-qty     { width: 44px; font-family: var(--font-mono); font-size: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); border-radius: 3px; color: var(--t1); padding: 2px 5px; outline: none; text-align: center; }
 .str-v        { font-size: 9px; color: var(--t3); }
-.sc-reasons   { font-size: 9px; color: var(--t3); font-family: var(--font-body); font-weight: 300; margin-top: 5px; line-height: 1.5; font-style: italic; }
+.sc-reasons   { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+.sc-reason-pill { font-size: 8.5px; font-family: var(--font-mono); font-weight: 500; padding: 2px 7px; border-radius: 10px; background: rgba(255,255,255,.06); color: var(--t2); border: 1px solid rgba(255,255,255,.08); white-space: nowrap; }
+.sc-why       { font-size: 8px; color: var(--t3); font-family: var(--font-body); margin-top: 5px; display: flex; gap: 10px; flex-wrap: wrap; }
+.sc-why span  { display: flex; align-items: center; gap: 3px; }
 .skel         { background: rgba(255,255,255,.04); border-radius: var(--r-sm); animation: skelPulse 1.4s ease infinite; }
 .skel-line    { height: 14px; margin-bottom: 6px; }
 .skel-block   { height: 60px; }
@@ -1912,10 +1915,34 @@ function sigCard(s) {
   const xfm  = +(s.transformer_score || conf * 0.85);
   const ta   = +(s.technical_score || str * 0.8);
   const sent = +(s.sentiment_score || 0.5);
-  const reasons = (s.reasons || []).slice(0,2).join(' · ') || s.strategy || '';
+  // Build reason pills — all reasons + RSI + ADX as individual pills
+  const rawReasons = s.reasons || [];
+  const extraPills = [];
+  if (s.rsi)  extraPills.push(`RSI ${s.rsi.toFixed(1)}`);
+  if (s.adx)  extraPills.push(`ADX ${s.adx.toFixed(1)}`);
+  if (s.macd_hist) extraPills.push(`MACD ${s.macd_hist > 0 ? '+' : ''}${s.macd_hist.toFixed(3)}`);
+  if (s.bb_pos !== undefined && s.bb_pos !== null) {
+    const bp = +s.bb_pos;
+    if (bp < 0.2) extraPills.push('BB oversold');
+    else if (bp > 0.8) extraPills.push('BB overbought');
+  }
+  const allPills = [...rawReasons, ...extraPills];
+  const pillsHTML = allPills.length
+    ? `<div class="sc-reasons">${allPills.map(r => `<span class="sc-reason-pill">${r}</span>`).join('')}</div>`
+    : '';
 
-  const rsiVal = s.rsi ? `RSI ${s.rsi.toFixed(1)}` : '';
-  const adxVal = s.adx ? ` ADX ${s.adx.toFixed(1)}` : '';
+  // R/R ratio and SL/TP context
+  const entry = s.entry || s.entry_price || 0;
+  const sl    = s.stop_loss   || 0;
+  const tp    = s.take_profit || 0;
+  const rr    = (entry && sl && tp) ? Math.abs(tp - entry) / Math.abs(entry - sl) : 0;
+  const stratName = (s.strategy || '').replace(/_/g,' ');
+  const whyHTML = `<div class="sc-why">
+    ${rr > 0 ? `<span>R/R ${rr.toFixed(1)}:1</span>` : ''}
+    ${entry && sl ? `<span>SL ${sl > entry ? '+' : ''}${((sl-entry)/entry*100).toFixed(1)}%</span>` : ''}
+    ${entry && tp ? `<span>TP ${tp > entry ? '+' : ''}${((tp-entry)/entry*100).toFixed(1)}%</span>` : ''}
+    ${stratName ? `<span style="margin-left:auto;color:var(--t4)">${stratName}</span>` : ''}
+  </div>`;
 
   return `<div class="sc ${dc}">
     <div class="sc-sym" style="color:${dir==='LONG'?'var(--green)':dir==='SHORT'?'var(--red)':'var(--t3)'}">${s.symbol}</div>
@@ -1927,7 +1954,8 @@ function sigCard(s) {
       <div class="br2"><div class="bl">TA</div><div class="bt"><div class="bf ta"   style="width:${clamp(ta*100,0,100).toFixed(0)}%"></div></div><div class="bv">${(ta*100).toFixed(0)}%</div></div>
       <div class="br2"><div class="bl">SENT</div><div class="bt"><div class="bf sent" style="width:${clamp(sent*100,0,100).toFixed(0)}%"></div></div><div class="bv">${(sent*100).toFixed(0)}%</div></div>
     </div>
-    ${reasons ? `<div class="sc-reasons">${reasons}${rsiVal ? ' · ' + rsiVal + adxVal : ''}</div>` : ''}
+    ${pillsHTML}
+    ${whyHTML}
     <div class="scf">
       <span class="str-v">str: ${(str*100).toFixed(0)}% · conf: ${(conf*100).toFixed(0)}%</span>
       <div style="display:flex;align-items:center;gap:5px">
