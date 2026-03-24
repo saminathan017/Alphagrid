@@ -673,6 +673,7 @@ def seed_default_accounts() -> None:
     demos = [
         ("builder@alphagrid.app", os.getenv("ALPHAGRID_BUILDER_PASSWORD", "Builder1!"), "Builder", UserRole.BUILDER, "builder"),
         ("trader@alphagrid.app",  os.getenv("ALPHAGRID_TRADER_PASSWORD",  "Trader1!"),  "Trader",  UserRole.TRADER,  "trader"),
+        ("demo@alphagrid.app",    "demo123", "Demo User", UserRole.TRADER, "demo"),
     ]
     for em, pw, name, role, uname in demos:
         if not user_manager.get_by_email(em):

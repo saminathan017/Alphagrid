@@ -663,7 +663,7 @@ async def ws_broadcast_loop():
                         sym: {"price": d["price"], "change_pct": d["change_pct"]}
                         for sym, d in list(state.prices.items())[:30]
                     },
-                    "signals":    (state.signals.get("day", []) + state.signals.get("swing", []))[:8],
+                    "signals":    state.signals.get("day", []) + state.signals.get("swing", []),
                     "positions":  list(state.positions.values()),
                     "health":     {
                         "status":    state.health["status"],
@@ -827,7 +827,7 @@ async def get_indicators(symbol: str):
 @app.get("/api/signals")
 async def get_signals(
     mode:   str = "day",
-    limit:  int = 20,
+    limit:  int = 500,
     min_confidence: float = 0.0,
 ):
     """Return latest generated trading signals filtered by mode."""
@@ -1108,7 +1108,7 @@ async def ws_endpoint(ws: WebSocket):
             "ts":          datetime.utcnow().isoformat(),
             "portfolio":   state.portfolio,
             "positions":   list(state.positions.values()),
-            "signals":     (state.signals.get("day", []) + state.signals.get("swing", []))[:10],
+            "signals":     state.signals.get("day", []) + state.signals.get("swing", []),
             "prices":      state.prices,
             "equity_curve": state.equity_curve,
             "health":      state.health,
@@ -1840,14 +1840,31 @@ async def get_chart_data(
     """
     sym = symbol.upper()
 
-    # Ensure candles are loaded
-    df = state.candles.get(sym)
-    if df is None or len(df) < 10:
-        df = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: _yf_history(sym, period, interval)
-        )
-        if df is not None and not df.empty:
-            state.candles[sym] = df
+    # Intraday intervals must be fetched live from yfinance (no parquet cache)
+    intraday_period = {"1h": "60d", "15m": "7d", "5m": "2d"}
+    if interval != "1d":
+        fetch_period = intraday_period.get(interval, "60d")
+        def _fetch_intraday():
+            try:
+                tk = yf.Ticker(sym)
+                df = tk.history(period=fetch_period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return pd.DataFrame()
+                df.columns = [c.lower() for c in df.columns]
+                df.index = pd.to_datetime(df.index, utc=True)
+                return df[["open", "high", "low", "close", "volume"]].dropna()
+            except Exception as e:
+                logger.warning(f"Intraday fetch failed {sym} {interval}: {e}")
+                return pd.DataFrame()
+        df = await asyncio.get_event_loop().run_in_executor(None, _fetch_intraday)
+    else:
+        df = state.candles.get(sym)
+        if df is None or len(df) < 10:
+            df = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: _yf_history(sym, period, interval)
+            )
+            if df is not None and not df.empty:
+                state.candles[sym] = df
 
     if df is None or df.empty:
         return JSONResponse({"error": f"No data for {sym}"}, status_code=404)

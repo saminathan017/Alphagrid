@@ -313,7 +313,7 @@ html, body {
       <div class="brand-icon">▲</div>
       <div>
         <div class="brand-name">AlphaGrid</div>
-        <span class="brand-sub">Trading Intelligence v6</span>
+        <span class="brand-sub">Trading Intelligence v7</span>
       </div>
     </div>
 
@@ -338,6 +338,17 @@ html, body {
       <div class="form-header">
         <div class="form-title" id="form-title">Welcome back</div>
         <div class="form-sub"   id="form-sub">Sign in to your AlphaGrid account</div>
+      </div>
+
+      <!-- Demo CTA -->
+      <button onclick="tryDemo()" style="width:100%;padding:13px;margin-bottom:14px;background:linear-gradient(135deg,rgba(0,255,200,.13),rgba(0,180,255,.1));border:1px solid rgba(0,255,200,.4);border-radius:var(--r);color:var(--green);font-family:var(--head);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:all .15s;position:relative;overflow:hidden">
+        <span style="margin-right:7px">▶</span> Try Live Demo — No Sign Up
+        <span style="position:absolute;top:4px;right:8px;font-size:8px;font-weight:400;color:rgba(0,255,200,.5);font-family:var(--mono);letter-spacing:.05em">INSTANT ACCESS</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-family:var(--body);font-size:10px;color:var(--t4)">or sign in</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
       </div>
 
       <div class="auth-tabs">
@@ -636,6 +647,31 @@ async function doSignup() {
     showMsg('signup-msg', 'Cannot reach server.', 'err');
     btn.disabled  = false;
     btn.innerHTML = 'Create Account';
+  }
+}
+
+// ── Demo login ────────────────────────────────────────────────────────────────
+async function tryDemo() {
+  const btn = event.currentTarget;
+  btn.innerHTML = '<span class="btn-spinner"></span> Launching demo…';
+  btn.disabled = true;
+  try {
+    const resp = await fetch(API + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'demo', email: 'demo', password: 'demo123' }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Demo login failed');
+    localStorage.setItem('ag_access_token',  data.access_token);
+    localStorage.setItem('ag_refresh_token', data.refresh_token);
+    localStorage.setItem('ag_user',          JSON.stringify(data.user));
+    window.location.href = '/dashboard';
+  } catch(e) {
+    btn.innerHTML = '▶ Try Live Demo — No Sign Up';
+    btn.disabled = false;
+    showMsg('login-msg', 'Demo unavailable: ' + e.message, 'err');
+    document.getElementById('login-form').style.display = 'block';
   }
 }
 

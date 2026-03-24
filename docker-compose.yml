@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  alphagrid:
+    build: .
+    image: alphagrid:latest
+    container_name: alphagrid
+    ports:
+      - "8080:8080"
+    environment:
+      - ALPHAGRID_JWT_SECRET=${ALPHAGRID_JWT_SECRET:-}
+      - ALPHAGRID_OWNER_USERNAME=${ALPHAGRID_OWNER_USERNAME:-admin}
+      - ALPHAGRID_OWNER_PASSWORD=${ALPHAGRID_OWNER_PASSWORD:-Admin@Grid1}
+      - ALPHAGRID_CORS_ORIGINS=${ALPHAGRID_CORS_ORIGINS:-*}
+      - ALPACA_API_KEY=${ALPACA_API_KEY:-}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:-}
+    volumes:
+      - ./data:/app/data           # price cache + DB persistence
+      - ./models:/app/models       # trained model files
+      - alphagrid_db:/app/alphagrid_auth.db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  alphagrid_db:

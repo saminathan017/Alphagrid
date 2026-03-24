@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: alphagrid
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: ALPHAGRID_JWT_SECRET
+        generateValue: true
+      - key: ALPHAGRID_OWNER_USERNAME
+        value: admin
+      - key: ALPHAGRID_OWNER_PASSWORD
+        value: Admin@Grid1
+      - key: ALPHAGRID_CORS_ORIGINS
+        value: "*"
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+    disk:
+      name: alphagrid-data
+      mountPath: /app/data
+      sizeGB: 1
