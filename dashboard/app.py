@@ -531,6 +531,7 @@ async def price_feed_loop():
     state.health["strategy_engine"] = "ok" if STRATEGY_OK else "unavailable"
 
     _last_signal_run = 0.0   # force signal run immediately after first price fetch
+    _bg_download_task: asyncio.Task | None = None  # non-blocking background download
 
     # ── Fast cold-start: priority symbols in one batch (~10-15s) ─────────────
     if not state.candles:
@@ -541,27 +542,52 @@ async def price_feed_loop():
         for sym, df in priority_data.items():
             state.candles[sym] = df
         logger.info(f"Priority symbols loaded: {len(priority_data)} ready — signals will generate now")
+        # Run signals immediately on priority symbols — don't wait for full download
+        if STRATEGY_OK and len(state.candles) > 0:
+            for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
+                try:
+                    new_sigs = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
+                    )
+                    state.signals[key] = new_sigs
+                    for s in new_sigs:
+                        state.signal_history.appendleft(s)
+                    state.health["signals_generated"] += len(new_sigs)
+                except Exception as e:
+                    logger.warning(f"Cold-start signal run failed: {e}")
+            _last_signal_run = time.time()
+            state.health["last_signal_run"] = datetime.utcnow().isoformat()
+            logger.info(f"Cold-start signals generated: day={len(state.signals.get('day',[]))}, swing={len(state.signals.get('swing',[]))}")
+
+    async def _background_history_download():
+        """Download remaining symbols in background without blocking signals."""
+        remaining = [s for s in all_syms if s not in state.candles]
+        logger.info(f"Background download: {len(remaining)} remaining symbols...")
+        for i in range(0, len(remaining), 20):
+            batch = remaining[i:i+20]
+            try:
+                batch_data = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda b=batch: _batch_yf_download(b, period="1y")
+                )
+                for sym, df in batch_data.items():
+                    if not df.empty:
+                        state.candles[sym] = df
+            except Exception as e:
+                logger.warning(f"Background batch download error: {e}")
+            await asyncio.sleep(1)
+        state.last_full_download = time.time()
+        logger.info(f"Background download complete: {len(state.candles)} symbols ready")
 
     while True:
         try:
-            # Full history download: on startup + every 6h
             now = time.time()
+
+            # Kick off full history download as a non-blocking task (every 6h)
+            # Signals are NOT blocked — they run independently every 60s
             if now - state.last_full_download > 21600:
-                logger.info("Downloading full OHLCV history (background)...")
-                # Load all syms in batches of 20 using batch download
-                remaining = [s for s in all_syms if s not in state.candles]
-                for i in range(0, len(remaining), 20):
-                    batch = remaining[i:i+20]
-                    batch_data = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda b=batch: _batch_yf_download(b, period="1y")
-                    )
-                    for sym, df in batch_data.items():
-                        if not df.empty:
-                            state.candles[sym] = df
-                    await asyncio.sleep(1)
-                state.last_full_download = time.time()
-                _last_signal_run = 0.0   # trigger fresh signal run after history reload
-                logger.info(f"History loaded for {len(state.candles)} symbols")
+                if _bg_download_task is None or _bg_download_task.done():
+                    _bg_download_task = asyncio.create_task(_background_history_download())
+                    logger.info("Background history download task started")
 
             # Live price update via yfinance.
             # Skip symbols already covered by the Alpaca WebSocket feed.
