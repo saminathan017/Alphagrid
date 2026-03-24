@@ -629,7 +629,7 @@ async function tryDemo() {
     const resp = await fetch(API + '/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'demo', email: 'demo', password: 'demo123' }),
+      body: JSON.stringify({ username: 'demo', email: 'demo', password: 'demo1234' }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Demo login failed');
