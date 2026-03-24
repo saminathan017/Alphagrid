@@ -479,6 +479,47 @@ def _start_alpaca_stream(api_key: str, secret_key: str) -> None:
 #  BACKGROUND TASKS
 # ═════════════════════════════════════════════════════════════════════════════
 
+# Priority symbols loaded first on cold start — visible to users within ~15s
+_PRIORITY_SYMS = [
+    "AAPL","MSFT","NVDA","TSLA","META","AMZN","GOOGL","AMD","SPY","QQQ",
+    "PLTR","CRWD","SOFI","COIN","NFLX","JPM","EURUSD=X","GBPUSD=X",
+]
+
+def _batch_yf_download(symbols: list, period: str = "1y") -> dict:
+    """Download multiple symbols in a single yfinance call. Returns {sym: df}."""
+    try:
+        raw = yf.download(
+            symbols, period=period, interval="1d",
+            auto_adjust=True, progress=False, threads=True,
+            group_by="ticker",
+        )
+        result = {}
+        if len(symbols) == 1:
+            sym = symbols[0]
+            df = raw.copy()
+            if not df.empty:
+                df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
+                df = df[["open","high","low","close","volume"]].dropna()
+                df.index = pd.to_datetime(df.index, utc=True)
+                result[sym] = df
+        else:
+            for sym in symbols:
+                try:
+                    df = raw[sym].copy().dropna(how="all")
+                    if df.empty:
+                        continue
+                    df.columns = [c.lower() for c in df.columns]
+                    df = df[["open","high","low","close","volume"]].dropna()
+                    df.index = pd.to_datetime(df.index, utc=True)
+                    result[sym] = df
+                except Exception:
+                    pass
+        return result
+    except Exception as e:
+        logger.warning(f"Batch yfinance download failed: {e}")
+        return {}
+
+
 async def price_feed_loop():
     """
     Background task: refresh prices every 5s using yfinance.
@@ -491,35 +532,33 @@ async def price_feed_loop():
 
     _last_signal_run = 0.0   # force signal run immediately after first price fetch
 
+    # ── Fast cold-start: priority symbols in one batch (~10-15s) ─────────────
+    if not state.candles:
+        logger.info(f"Cold start: fetching {len(_PRIORITY_SYMS)} priority symbols...")
+        priority_data = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _batch_yf_download(_PRIORITY_SYMS, period="1y")
+        )
+        for sym, df in priority_data.items():
+            state.candles[sym] = df
+        logger.info(f"Priority symbols loaded: {len(priority_data)} ready — signals will generate now")
+
     while True:
         try:
-            # Full history download: on startup + every 30 min
+            # Full history download: on startup + every 6h
             now = time.time()
             if now - state.last_full_download > 21600:
-                logger.info("Downloading full OHLCV history...")
-                for i in range(0, len(all_syms), BATCH):
-                    batch = all_syms[i:i+BATCH]
-                    for sym in batch:
-                        df = await asyncio.get_event_loop().run_in_executor(
-                            None, lambda s=sym: _yf_history(s, "10y", "1d")
-                        )
-                        # Fallback: fetch live from yfinance if parquet cache is missing
-                        if df.empty:
-                            def _live_fetch(s=sym):
-                                try:
-                                    tk = yf.Ticker(s)
-                                    d = tk.history(period="1y", interval="1d", auto_adjust=True)
-                                    if d.empty:
-                                        return pd.DataFrame()
-                                    d.columns = [c.lower() for c in d.columns]
-                                    d.index = pd.to_datetime(d.index, utc=True)
-                                    return d[["open","high","low","close","volume"]].dropna()
-                                except Exception:
-                                    return pd.DataFrame()
-                            df = await asyncio.get_event_loop().run_in_executor(None, _live_fetch)
+                logger.info("Downloading full OHLCV history (background)...")
+                # Load all syms in batches of 20 using batch download
+                remaining = [s for s in all_syms if s not in state.candles]
+                for i in range(0, len(remaining), 20):
+                    batch = remaining[i:i+20]
+                    batch_data = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda b=batch: _batch_yf_download(b, period="1y")
+                    )
+                    for sym, df in batch_data.items():
                         if not df.empty:
                             state.candles[sym] = df
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1)
                 state.last_full_download = time.time()
                 _last_signal_run = 0.0   # trigger fresh signal run after history reload
                 logger.info(f"History loaded for {len(state.candles)} symbols")
