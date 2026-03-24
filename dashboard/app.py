@@ -1249,6 +1249,154 @@ async def get_metrics():
     }
 
 
+# ── Backtest reference values (2022-2024, 10 large-cap symbols, $100k) ────────
+_BACKTEST_REF = {
+    "win_rate":      0.294,   # 29.4% across 211 trades
+    "sharpe_ratio":  0.56,
+    "profit_factor": 1.48,    # ~(56% return / ~0.35 avg loss ratio) estimated from backtest curve
+    "max_drawdown":  0.351,   # 35.1% max drawdown (2022 bear)
+    "avg_trade_pnl": 265.5,   # $56,005 gain / 211 trades ≈ $265 avg
+    "total_trades":  211,
+}
+
+
+@app.get("/api/divergence")
+async def get_divergence():
+    """
+    Compare live paper trade performance against the backtest reference.
+    Returns per-metric divergence so users can see if the strategy is
+    behaving as expected in real trading vs historical simulation.
+    """
+    trades = state.trades
+    n = len(trades)
+
+    if n < 5:
+        return {
+            "status": "insufficient_data",
+            "message": f"Need at least 5 closed trades to compare ({n} so far)",
+            "n_trades": n,
+            "backtest": _BACKTEST_REF,
+            "live": {},
+            "metrics": [],
+            "rolling_win_rate": [],
+        }
+
+    pnls     = [t["pnl"] for t in trades]
+    wins     = [p for p in pnls if p > 0]
+    losses   = [p for p in pnls if p <= 0]
+    win_rate = len(wins) / n
+
+    gross_profit = sum(wins) if wins else 0
+    gross_loss   = abs(sum(losses)) if losses else 1e-9
+    profit_factor = gross_profit / gross_loss
+
+    avg_pnl = sum(pnls) / n
+
+    if len(state.equity_curve) >= 2:
+        vals   = [e["value"] for e in state.equity_curve]
+        rets   = np.diff(vals) / np.array(vals[:-1])
+        sharpe = float(np.mean(rets) / (np.std(rets) + 1e-9) * np.sqrt(252)) if len(rets) else 0
+    else:
+        sharpe = 0.0
+
+    # Rolling win rate: last 20 trades in chronological order
+    sorted_trades = sorted(trades, key=lambda t: t.get("closed_at", ""))
+    rolling_win_rate = []
+    for i in range(len(sorted_trades)):
+        window = sorted_trades[max(0, i - 9): i + 1]  # last 10 up to this trade
+        wwr = sum(1 for t in window if t.get("pnl", 0) > 0) / len(window)
+        rolling_win_rate.append({
+            "trade": i + 1,
+            "symbol": sorted_trades[i]["symbol"],
+            "win_rate": round(wwr, 3),
+        })
+
+    live = {
+        "win_rate":      round(win_rate, 3),
+        "sharpe_ratio":  round(sharpe, 3),
+        "profit_factor": round(profit_factor, 3),
+        "max_drawdown":  round(state.portfolio.get("drawdown", 0), 3),
+        "avg_trade_pnl": round(avg_pnl, 2),
+        "total_trades":  n,
+    }
+
+    def _status(live_val: float, ref_val: float, higher_is_better: bool) -> str:
+        """Return on_track / warning / underperforming based on % deviation."""
+        if ref_val == 0:
+            return "on_track"
+        delta_pct = (live_val - ref_val) / abs(ref_val)
+        if higher_is_better:
+            if delta_pct >= -0.10:
+                return "on_track"
+            elif delta_pct >= -0.25:
+                return "warning"
+            else:
+                return "underperforming"
+        else:
+            if delta_pct <= 0.10:
+                return "on_track"
+            elif delta_pct <= 0.25:
+                return "warning"
+            else:
+                return "underperforming"
+
+    metrics = [
+        {
+            "name":  "Win Rate",
+            "backtest": f"{_BACKTEST_REF['win_rate']*100:.1f}%",
+            "live":     f"{live['win_rate']*100:.1f}%",
+            "delta":    f"{(live['win_rate'] - _BACKTEST_REF['win_rate'])*100:+.1f}%",
+            "status":   _status(live["win_rate"], _BACKTEST_REF["win_rate"], True),
+        },
+        {
+            "name":  "Profit Factor",
+            "backtest": f"{_BACKTEST_REF['profit_factor']:.2f}x",
+            "live":     f"{live['profit_factor']:.2f}x",
+            "delta":    f"{live['profit_factor'] - _BACKTEST_REF['profit_factor']:+.2f}x",
+            "status":   _status(live["profit_factor"], _BACKTEST_REF["profit_factor"], True),
+        },
+        {
+            "name":  "Sharpe Ratio",
+            "backtest": f"{_BACKTEST_REF['sharpe_ratio']:.2f}",
+            "live":     f"{live['sharpe_ratio']:.2f}",
+            "delta":    f"{live['sharpe_ratio'] - _BACKTEST_REF['sharpe_ratio']:+.2f}",
+            "status":   _status(live["sharpe_ratio"], _BACKTEST_REF["sharpe_ratio"], True),
+        },
+        {
+            "name":  "Max Drawdown",
+            "backtest": f"{_BACKTEST_REF['max_drawdown']*100:.1f}%",
+            "live":     f"{live['max_drawdown']*100:.1f}%",
+            "delta":    f"{(live['max_drawdown'] - _BACKTEST_REF['max_drawdown'])*100:+.1f}%",
+            "status":   _status(live["max_drawdown"], _BACKTEST_REF["max_drawdown"], False),
+        },
+        {
+            "name":  "Avg Trade P&L",
+            "backtest": f"${_BACKTEST_REF['avg_trade_pnl']:.0f}",
+            "live":     f"${live['avg_trade_pnl']:.0f}",
+            "delta":    f"${live['avg_trade_pnl'] - _BACKTEST_REF['avg_trade_pnl']:+.0f}",
+            "status":   _status(live["avg_trade_pnl"], _BACKTEST_REF["avg_trade_pnl"], True),
+        },
+    ]
+
+    # Overall status: worst single metric drives the overall
+    statuses = [m["status"] for m in metrics]
+    if "underperforming" in statuses:
+        overall = "underperforming"
+    elif "warning" in statuses:
+        overall = "warning"
+    else:
+        overall = "on_track"
+
+    return {
+        "status":           overall,
+        "n_trades":         n,
+        "backtest":         _BACKTEST_REF,
+        "live":             live,
+        "metrics":          metrics,
+        "rolling_win_rate": rolling_win_rate[-40:],  # last 40 for chart
+    }
+
+
 @app.get("/api/universe")
 async def get_universe():
     """Return all tracked symbols with live prices and basic stats."""

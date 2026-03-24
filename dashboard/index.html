@@ -1119,6 +1119,9 @@ input, select, textarea { font-family: inherit; }
 .ds-warning   { background:rgba(255,180,0,.12);  color:#ffb400; }
 .ds-critical  { background:rgba(255,51,102,.12); color:var(--red); }
 .ds-warming   { background:rgba(255,255,255,.06); color:var(--t3); }
+.div-on_track       { background:rgba(0,255,200,.12); color:var(--green); font-size:8px; font-family:var(--font-body); font-weight:600; padding:1px 7px; border-radius:8px; }
+.div-warning        { background:rgba(255,180,0,.12);  color:#ffb400;      font-size:8px; font-family:var(--font-body); font-weight:600; padding:1px 7px; border-radius:8px; }
+.div-underperforming{ background:rgba(255,51,102,.12); color:var(--red);   font-size:8px; font-family:var(--font-body); font-weight:600; padding:1px 7px; border-radius:8px; }
 .decay-dots   { display:flex; gap:2px; }
 .decay-dot    { width:6px; height:6px; border-radius:50%; }
 .decay-trend  { font-size:8px; font-family:var(--font-mono); min-width:20px; text-align:center; }
@@ -1417,6 +1420,25 @@ input, select, textarea { font-family: inherit; }
   <div class="g2" style="margin-bottom:12px">
     <div class="panel"><div class="ph"><span class="pt">P&amp;L Distribution</span></div><div class="pb2"><div class="cw"><canvas id="pnl-c"></canvas></div></div></div>
     <div class="panel"><div class="ph"><span class="pt">Cumulative P&amp;L per Trade</span></div><div class="pb2"><div class="cw"><canvas id="eq2-c"></canvas></div></div></div>
+  </div>
+  <!-- Live vs Backtest Divergence panel -->
+  <div class="panel" id="div-panel" style="margin-bottom:12px">
+    <div class="ph" onclick="toggleDivPanel()" style="cursor:pointer">
+      <span class="pt">Live vs Backtest</span>
+      <span id="div-overall" style="font-size:9px;font-family:var(--font-body);color:var(--t3)">loading…</span>
+    </div>
+    <div class="pb2" id="div-body">
+      <div id="div-msg" style="font-size:10px;font-family:var(--font-body);color:var(--t3);margin-bottom:10px"></div>
+      <div id="div-table-wrap" style="display:none">
+        <table class="tbl" style="margin-bottom:12px">
+          <thead><tr><th>Metric</th><th>Backtest</th><th>Live</th><th>Delta</th><th>Status</th></tr></thead>
+          <tbody id="div-tb"></tbody>
+        </table>
+        <div style="font-size:8px;font-family:var(--font-body);font-weight:500;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Rolling Win Rate (last 40 trades, 10-trade window)</div>
+        <div class="cw" style="height:80px"><canvas id="div-wr-c"></canvas></div>
+        <div style="font-size:9px;font-family:var(--font-body);color:var(--t3);margin-top:8px">Backtest reference: 2022-2024, 10 large-cap symbols, $100k start. Live uses current paper trades.</div>
+      </div>
+    </div>
   </div>
   <div class="panel"><div class="ph"><span class="pt">Trade History</span><span class="badge by" id="trade-count-badge">0 trades</span></div><div class="scw" style="max-height:300px"><table class="tbl"><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>P&amp;L</th><th>P&amp;L%</th><th>Closed</th></tr></thead><tbody id="tr-tb"><tr><td colspan="7" style="text-align:center;color:var(--t3);padding:20px;font-family:var(--font-body)">No trades yet</td></tr></tbody></table></div></div>
 </div>
@@ -2333,6 +2355,7 @@ async function renderUniversePage() {
 //  TRADES PAGE
 // ══════════════════════════════════════════════════════════════════════════
 async function renderTradesPage() {
+  renderDivergencePanel();  // async, renders independently
   const [trades, metrics] = await Promise.all([
     apiFetch('/api/trades?limit=200').catch(() => S.trades),
     apiFetch('/api/metrics').catch(() => null),
@@ -2410,6 +2433,107 @@ async function renderTradesPage() {
     c2.font = '11px Figtree, sans-serif';
     c2.textAlign = 'center';
     c2.fillText('No closed trades yet', c2.canvas.width/2, c2.canvas.height/2);
+  }
+}
+
+// ── Divergence panel (Live vs Backtest) ────────────────────────────────────
+function toggleDivPanel() {
+  const body = $('div-body');
+  if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+async function renderDivergencePanel() {
+  const el = $('div-overall');
+  if (el) el.textContent = 'loading…';
+  const data = await apiFetch('/api/divergence').catch(() => null);
+  if (!data) { if (el) el.textContent = 'unavailable'; return; }
+
+  const overallColors = {
+    on_track: 'var(--green)',
+    warning: '#ffb400',
+    underperforming: 'var(--red)',
+    insufficient_data: 'var(--t3)',
+  };
+  const overallLabels = {
+    on_track: 'On Track',
+    warning: 'Warning',
+    underperforming: 'Underperforming',
+    insufficient_data: 'Not enough data',
+  };
+  if (el) {
+    el.textContent = overallLabels[data.status] || data.status;
+    el.style.color = overallColors[data.status] || 'var(--t3)';
+    el.style.fontWeight = '600';
+  }
+
+  const msg = $('div-msg');
+  const wrap = $('div-table-wrap');
+
+  if (data.status === 'insufficient_data') {
+    if (msg) msg.textContent = data.message;
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+
+  if (msg) msg.textContent = `${data.n_trades} live trades vs backtest reference (2022-2024, 10 symbols)`;
+  if (wrap) wrap.style.display = '';
+
+  // Render comparison table
+  const tbody = $('div-tb');
+  if (tbody) {
+    tbody.innerHTML = (data.metrics || []).map(m => {
+      const cls = `div-${m.status}`;
+      const statusLabel = { on_track: 'On Track', warning: 'Watch', underperforming: 'Below' }[m.status] || m.status;
+      const deltaCol = m.delta.startsWith('+') ? 'var(--green)' : m.delta.startsWith('-') ? 'var(--red)' : 'var(--t3)';
+      return `<tr>
+        <td style="font-family:var(--font-body);font-size:10px;color:var(--t2)">${m.name}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:var(--t3)">${m.backtest}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:var(--t1);font-weight:600">${m.live}</td>
+        <td style="font-family:var(--font-mono);font-size:10px;color:${deltaCol}">${m.delta}</td>
+        <td><span class="${cls}">${statusLabel}</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Rolling win rate sparkline
+  destroyChart('divWrC');
+  const cvs = $('div-wr-c');
+  if (cvs && data.rolling_win_rate && data.rolling_win_rate.length) {
+    const labels = data.rolling_win_rate.map(d => `#${d.trade}`);
+    const vals   = data.rolling_win_rate.map(d => +(d.win_rate * 100).toFixed(1));
+    const ref    = (data.backtest?.win_rate || 0.294) * 100;
+    S.charts.divWrC = new Chart(cvs.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Live Win Rate (10-trade rolling)',
+            data: vals,
+            borderColor: 'rgba(0,255,200,0.8)',
+            backgroundColor: 'rgba(0,255,200,0.06)',
+            borderWidth: 1.5,
+            pointRadius: 2,
+            fill: true,
+            tension: 0.3,
+          },
+          {
+            label: `Backtest ${ref.toFixed(1)}%`,
+            data: new Array(vals.length).fill(ref),
+            borderColor: 'rgba(255,180,0,0.5)',
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+            fill: false,
+          },
+        ],
+      },
+      options: {
+        ...CO,
+        plugins: { ...CO.plugins, legend: { display: true, labels: { color: 'rgba(150,170,200,0.7)', font: { size: 9 }, boxWidth: 12 } } },
+        scales: { ...CO.scales, y: { ...CO.scales.y, ticks: { callback: v => v + '%' } } },
+      },
+    });
   }
 }
 
