@@ -1,0 +1,23 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Local databases — must NOT be baked into image; server seeds on first start
+alphagrid_auth.db
+data/*.db
+
+# Secrets
+.env
+
+# Dev tools
+.vscode/
+.idea/
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
