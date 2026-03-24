@@ -1,7 +1,7 @@
 AlphaGrid v7 — ML-Powered Trading Intelligence
 ════════════════════════════════════════════════
 
-[![Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now-brightgreen)](https://alphagrid.up.railway.app)
+[![Demo](https://img.shields.io/badge/Live%20Demo-Try%20Now-brightgreen)](https://web-production-bd6aa.up.railway.app)
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue)](https://hub.docker.com)
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](https://python.org)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
@@ -22,7 +22,7 @@ Live Demo
 
 No sign-up required. Click "Try Live Demo" on the login page.
 
-    https://alphagrid.up.railway.app
+    https://web-production-bd6aa.up.railway.app
 
 The demo account is read-only (TRADER role) with paper trading enabled.
 You can browse signals, charts, and portfolio analytics without any credentials.
