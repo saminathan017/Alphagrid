@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT))
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Header, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -168,6 +168,7 @@ class AppState:
         self.prices:   dict[str, dict]        = {}   # symbol → {price, chg, chg_pct, ...}
         self.candles:  dict[str, pd.DataFrame] = {}  # symbol → OHLCV df
         self.signals:  dict[str, list[dict]]   = {"day": [], "swing": []}  # mode → signals
+        self.signals_json_cache: dict[str, bytes] = {}  # pre-serialized JSON for fast GET
         self.trades:   list[dict]              = []   # paper trades log
         self.equity_curve: list[dict]          = []  # daily snapshots
         self.portfolio: dict                   = {
@@ -550,6 +551,7 @@ async def price_feed_loop():
                         None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
                     )
                     state.signals[key] = new_sigs
+                    state.signals_json_cache[key] = json.dumps(new_sigs).encode()
                     for s in new_sigs:
                         state.signal_history.appendleft(s)
                     state.health["signals_generated"] += len(new_sigs)
@@ -626,13 +628,14 @@ async def price_feed_loop():
                 except Exception:
                     pass
 
-            # Run signals every 60s (and immediately on startup/history reload)
-            if now - _last_signal_run >= 60 and len(state.candles) > 0:
+            # Run signals every 20s (and immediately on startup/history reload)
+            if now - _last_signal_run >= 20 and len(state.candles) > 0:
                 for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
                     new_sigs = await asyncio.get_event_loop().run_in_executor(
                         None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
                     )
                     state.signals[key] = new_sigs
+                    state.signals_json_cache[key] = json.dumps(new_sigs).encode()
                     for s in new_sigs:
                         state.signal_history.appendleft(s)
                     state.health["signals_generated"] += len(new_sigs)
@@ -911,6 +914,11 @@ async def get_signals(
 ):
     """Return latest generated trading signals filtered by mode."""
     key = "swing" if mode == "swing" else "day"
+    # Return pre-cached JSON bytes directly — avoids re-serializing on every request
+    if min_confidence == 0.0 and limit >= 500:
+        cached = state.signals_json_cache.get(key)
+        if cached:
+            return Response(content=cached, media_type="application/json")
     sigs = state.signals.get(key, [])
     if min_confidence > 0:
         sigs = [s for s in sigs if s.get("confidence", 0) >= min_confidence]
@@ -931,6 +939,7 @@ async def refresh_signals(mode: str = "day"):
     )
     key = "swing" if mode == "swing" else "day"
     state.signals[key] = new_sigs
+    state.signals_json_cache[key] = json.dumps(new_sigs).encode()
     state.health["last_signal_run"] = datetime.utcnow().isoformat()
     return {"generated": len(new_sigs), "signals": new_sigs[:5]}
 

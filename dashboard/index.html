@@ -2473,6 +2473,9 @@ async function init() {
   // Poll REST every 10s as backup/supplement to WS
   setInterval(pollREST, 10000);
 
+  // Auto-refresh signals page every 15s while active (backend regenerates every 20s)
+  setInterval(() => { if (S.page === 'signals') renderSignalsPage(); }, 15000);
+
   // Every 30s update equity chart even if on overview
   setInterval(updateEquityChart, 30000);
 
