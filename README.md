@@ -257,7 +257,7 @@ Environment variables:
 
 ## Retraining the models
 
-Training 146 symbols from scratch on a MacBook takes 6–12 hours. The repo ships with pre-trained checkpoints so signals work on first launch, but if you want to retrain or add new symbols, a bootstrap script provisions an EC2 g4dn.xlarge spot instance for roughly $0.50–$1.50 total.
+Training all 150 symbols from scratch on a MacBook takes 6–12 hours. The repo ships with pre-trained checkpoints so signals work on first launch, but if you want to retrain or add new symbols, a bootstrap script provisions an EC2 g4dn.xlarge spot instance for roughly $0.50–$1.50 total.
 
 ```bash
 # On the EC2 instance after running the bootstrap script
@@ -266,7 +266,7 @@ bash scripts/cloud_bootstrap.sh
 
 Instance options if you want to tune cost vs. speed:
 
-| Instance | GPU | Spot price | Time for 146 symbols | Total cost |
+| Instance | GPU | Spot price | Time for 150 symbols | Total cost |
 |---|---|---|---|---|
 | g4dn.xlarge | NVIDIA T4 | ~$0.16/hr | 3–4 hours | ~$0.50–0.65 |
 | g4dn.2xlarge | NVIDIA T4 | ~$0.28/hr | 2–3 hours | ~$0.55–0.85 |
@@ -275,7 +275,7 @@ Instance options if you want to tune cost vs. speed:
 To retrain specific symbols or run a quick smoke test:
 
 ```bash
-python scripts/train_models.py                            # all 146 symbols
+python scripts/train_models.py                            # all 150 symbols
 python scripts/train_models.py --symbols AAPL,MSFT,NVDA  # specific symbols
 python scripts/train_models.py --symbols AAPL --quick    # about 5 minutes
 ```
