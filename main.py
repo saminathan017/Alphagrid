@@ -55,9 +55,10 @@ def main():
     setup_logger()
     args = parse_args()
     logger.info("=" * 60)
-    logger.info("AlphaGrid — Automated Trading Intelligence System")
+    logger.info("AlphaGrid Capital — Live Trading Intelligence Platform")
     logger.info("=" * 60)
-    logger.info(f"Dashboard: http://localhost:{args.port}")
+    logger.info(f"Landing:   http://localhost:{args.port}/login")
+    logger.info(f"Dashboard: http://localhost:{args.port}/dashboard")
     if args.trade:
         logger.info(f"Trading:   {args.mode.upper()} mode")
     logger.info("")

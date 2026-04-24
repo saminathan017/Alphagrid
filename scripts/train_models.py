@@ -33,6 +33,7 @@ Expected out-of-sample performance:
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -259,6 +260,22 @@ def walk_forward_cv_lgbm(
 def download(symbol: str, lookback: int = 730) -> pd.DataFrame:
     logger.info(f"  Downloading {symbol} ({lookback}d)…")
     df = download_raw(symbol, lookback)
+    if df.empty:
+        db_path = ROOT / "data" / "alphagrid_history.db"
+        table = f"ohlcv_{symbol.lower().replace('=','_').replace('-','_')}_1d"
+        if db_path.exists():
+            try:
+                with sqlite3.connect(db_path) as conn:
+                    df = pd.read_sql_query(
+                        f'SELECT ts, open, high, low, close, volume FROM "{table}" ORDER BY ts',
+                        conn,
+                        parse_dates=["ts"],
+                    )
+                if not df.empty:
+                    df = df.set_index("ts").tail(lookback if lookback > 0 else len(df))
+                    logger.info(f"  {symbol}: loaded {len(df)} bars from local SQLite cache")
+            except Exception as e:
+                logger.warning(f"  Local SQLite load failed for {symbol}: {e}")
     if not df.empty:
         logger.info(f"  {symbol}: {len(df)} bars ({df.index[0].date()} → {df.index[-1].date()})")
     return df
@@ -276,8 +293,9 @@ def calibration_report(y_prob, y_true, name="") -> None:
     """Print accuracy at each confidence tier — the most important table."""
     y_prob  = np.array(y_prob)
     y_true  = np.array(y_true)
-    conf    = np.abs(y_prob - 0.5) * 2.0
-    tiers   = [0.0, 0.20, 0.40, 0.50, 0.60, 0.70, 0.80]
+    from models.evaluator import ModelEvaluator
+    conf    = ModelEvaluator.directional_confidence(y_prob)
+    tiers   = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]
     logger.info(f"\n  {'─'*62}")
     logger.info(f"  CALIBRATION TABLE — {name}")
     logger.info(f"  {'Confidence':>12} {'N signals':>10} {'% of total':>10} {'Accuracy':>10}")

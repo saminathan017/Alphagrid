@@ -3,7 +3,7 @@ version: "3.9"
 services:
   alphagrid:
     build:
-      context: .
+      context: ..
       dockerfile: deploy/Dockerfile
     image: alphagrid:latest
     container_name: alphagrid
@@ -17,8 +17,8 @@ services:
       - ALPACA_API_KEY=${ALPACA_API_KEY:-}
       - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY:-}
     volumes:
-      - ./data:/app/data
-      - ./models:/app/models
+      - ../data:/app/data          # price cache + DB persistence
+      - ../models:/app/models      # trained model files
       - alphagrid_db:/app/alphagrid_auth.db
     restart: unless-stopped
     healthcheck:

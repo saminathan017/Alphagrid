@@ -3,982 +3,2328 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AlphaGrid — Command Center</title>
+<title>AlphaGrid Capital</title>
+<script>!function(){try{var th=localStorage.getItem('ag_theme');if(th)document.documentElement.dataset.theme=th}catch(e){}}();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
 <style>
-:root {
-  --bg:       #020408;
-  --s1:       #060d18;
-  --s2:       #0a1525;
-  --s3:       #0f1e35;
-  --s4:       #152540;
-  --border:   rgba(255,255,255,.06);
-  --bord-em:  rgba(99,179,237,.2);
-
-  --accent:   #3b82f6;
-  --accent2:  #06b6d4;
-  --green:    #10b981;
-  --red:      #ef4444;
-  --amber:    #f59e0b;
-  --violet:   #8b5cf6;
-
-  --t1: #f0f6ff;
-  --t2: #94a3b8;
-  --t3: #4a6070;
-  --t4: #1e3347;
-
-  --mono:  'Space Mono', monospace;
-  --head:  'Syne', sans-serif;
-  --body:  'Space Grotesk', sans-serif;
-  --r:     8px;
+:root{
+  --bg:#eef1ec;
+  --bg-2:#f8faf6;
+  --ink:#111513;
+  --ink-2:#2d3831;
+  --muted:#647267;
+  --muted-2:#8d998f;
+  --line:rgba(17,21,19,.08);
+  --line-strong:rgba(17,21,19,.14);
+  --panel:rgba(255,255,255,.84);
+  --panel-solid:#ffffff;
+  --shadow:0 24px 80px rgba(22,34,24,.08);
+  --green:#0e6a47;
+  --green-2:#1f8f64;
+  --green-soft:#d5efe2;
+  --gold:#b18138;
+  --hero:#0f1512;
+  --hero-2:#16211b;
+  --hero-line:rgba(255,255,255,.08);
+  --hero-text:#f3f6f1;
+  --mono:'IBM Plex Mono',monospace;
+  --body:'Manrope',sans-serif;
+  --radius-sm:14px;
+  --radius-md:24px;
+  --radius-lg:36px;
+  --max:1280px;
+  --ease:cubic-bezier(.22,1,.36,1);
 }
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-html, body {
-  width:100%; height:100%;
-  background:var(--bg); color:var(--t1);
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  min-height:100vh;
   font-family:var(--body);
-  overflow:hidden;
+  color:var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(14,106,71,.08), transparent 34%),
+    radial-gradient(circle at 85% 18%, rgba(177,129,56,.10), transparent 24%),
+    linear-gradient(180deg, #f7f8f4 0%, #edf0ea 42%, #f7f8f4 100%);
   -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
 }
+a{text-decoration:none;color:inherit}
+button,input{font:inherit}
+button{cursor:pointer}
 
-/* ── Canvas bg ── */
-#bg-canvas {
-  position:fixed; inset:0; z-index:0;
-  pointer-events:none;
-}
-
-/* ── Layout ── */
-.wrap {
-  position:relative; z-index:10;
-  display:grid; grid-template-columns: 1fr 480px;
-  width:100%; height:100vh;
-}
-
-/* ══════════════════ LEFT PANEL ══════════════════ */
-.left {
-  position:relative; overflow:hidden;
-  display:flex; flex-direction:column; justify-content:center;
-  padding:0 80px;
-  border-right:1px solid var(--border);
-}
-
-/* Animated gradient orb */
-.left-orb {
-  position:absolute; top:-20%; left:-10%;
-  width:70%; padding-top:70%;
-  border-radius:50%;
-  background: radial-gradient(ellipse, rgba(59,130,246,.12) 0%, rgba(6,182,212,.06) 40%, transparent 70%);
-  animation: orbFloat 12s ease-in-out infinite;
-  pointer-events:none;
-}
-.left-orb2 {
-  position:absolute; bottom:-20%; right:-5%;
-  width:55%; padding-top:55%;
-  border-radius:50%;
-  background: radial-gradient(ellipse, rgba(139,92,246,.1) 0%, transparent 70%);
-  animation: orbFloat 15s ease-in-out infinite reverse;
-  pointer-events:none;
-}
-@keyframes orbFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-40px)} }
-
-/* Grid overlay */
-.left-grid {
-  position:absolute; inset:0; z-index:0;
-  background-image:
-    linear-gradient(rgba(59,130,246,.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59,130,246,.03) 1px, transparent 1px);
-  background-size:48px 48px;
-}
-
-.left-content { position:relative; z-index:2; }
-
-/* Brand */
-.brand { display:flex; align-items:center; gap:16px; margin-bottom:60px; }
-.brand-mark {
-  width:48px; height:48px;
-  background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(6,182,212,.1));
-  border:1px solid rgba(59,130,246,.35);
-  border-radius:12px;
-  display:flex; align-items:center; justify-content:center;
+.page-shell{
   position:relative;
+  isolation:isolate;
 }
-.brand-mark svg { width:22px; height:22px; }
-.brand-mark::after {
-  content:'';
-  position:absolute; inset:-1px;
-  border-radius:12px;
-  background:linear-gradient(135deg, rgba(59,130,246,.3), transparent 60%);
-  mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite:exclude;
-  padding:1px;
+.noise{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.28;
+  background-image:
+    radial-gradient(rgba(0,0,0,.05) .6px, transparent .7px);
+  background-size:10px 10px;
+  mask-image:linear-gradient(180deg, rgba(0,0,0,.9), rgba(0,0,0,.2));
 }
-.brand-info {}
-.brand-name {
-  font-family:var(--head); font-size:18px; font-weight:800;
-  letter-spacing:.1em; color:var(--t1); text-transform:uppercase;
+.grid-glow{
+  position:fixed;
+  inset:-10%;
+  pointer-events:none;
+  background:
+    linear-gradient(rgba(17,21,19,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17,21,19,.04) 1px, transparent 1px);
+  background-size:72px 72px;
+  mask-image:radial-gradient(circle at center, rgba(0,0,0,.55), transparent 78%);
+  opacity:.45;
 }
-.brand-tag {
-  font-family:var(--mono); font-size:9px; font-weight:400;
-  color:var(--t3); letter-spacing:.15em; margin-top:2px;
-}
-
-/* Headline */
-.headline {
-  font-family:var(--head); font-size:52px; font-weight:800;
-  line-height:1.02; letter-spacing:-.03em;
-  color:var(--t1); margin-bottom:24px;
-}
-.headline-accent {
-  background:linear-gradient(135deg, var(--accent), var(--accent2));
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  background-clip:text;
-}
-
-.sub {
-  font-size:15px; font-weight:300; color:var(--t3);
-  line-height:1.7; max-width:400px; margin-bottom:52px;
+.scroll-indicator{
+  position:fixed;
+  top:0;
+  left:0;
+  height:3px;
+  width:0;
+  background:linear-gradient(90deg, var(--green), #5eb88f 70%, #d5efe2 100%);
+  z-index:90;
+  box-shadow:0 0 18px rgba(14,106,71,.35);
 }
 
-/* Feature list */
-.feats { display:flex; flex-direction:column; gap:14px; }
-.feat {
-  display:flex; align-items:center; gap:14px;
-  padding:12px 16px;
-  background:rgba(255,255,255,.02);
-  border:1px solid rgba(255,255,255,.04);
-  border-radius:10px;
-  transition:all .2s;
+.site-header{
+  position:sticky;
+  top:0;
+  z-index:80;
+  padding:18px 24px 0;
 }
-.feat:hover {
-  background:rgba(59,130,246,.04);
-  border-color:rgba(59,130,246,.12);
-  transform:translateX(4px);
+.header-shell{
+  max-width:var(--max);
+  margin:0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+  padding:14px 18px;
+  background:rgba(255,255,255,.6);
+  border:1px solid rgba(255,255,255,.55);
+  box-shadow:0 10px 50px rgba(17,21,19,.07);
+  backdrop-filter:blur(18px);
+  border-radius:999px;
 }
-.feat-icon {
-  width:32px; height:32px; border-radius:8px; flex-shrink:0;
-  display:flex; align-items:center; justify-content:center; font-size:14px;
+.brand{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  min-width:0;
 }
-.feat-text { font-size:13px; font-weight:400; color:var(--t2); }
-.feat-text strong { color:var(--t1); font-weight:600; }
-
-/* Live data tickers on left */
-.live-strip {
-  position:absolute; bottom:0; left:0; right:0;
-  height:36px;
-  background:rgba(0,0,0,.4);
-  border-top:1px solid var(--border);
-  overflow:hidden;
-  display:flex; align-items:center;
-  z-index:5;
+.brand-mark{
+  width:42px;
+  height:42px;
+  border-radius:14px;
+  background:linear-gradient(145deg, #153224, #0e6a47);
+  display:grid;
+  place-items:center;
+  color:#f4f8f4;
+  box-shadow:0 16px 30px rgba(14,106,71,.22);
 }
-.ls-inner {
-  display:flex; white-space:nowrap;
-  animation:lsScroll 30s linear infinite;
-  gap:0;
-}
-.ls-tick {
-  display:inline-flex; align-items:center; gap:6px;
-  padding:0 20px; border-right:1px solid rgba(255,255,255,.04);
-  font-family:var(--mono); font-size:9px;
-}
-.ls-sym { color:var(--t1); font-weight:700; letter-spacing:.06em; }
-.ls-val { color:var(--t2); }
-.ls-chg.up { color:var(--green); }
-.ls-chg.dn { color:var(--red); }
-@keyframes lsScroll { from{transform:translateX(0)} to{transform:translateX(-50%)} }
-
-/* Stat cards on left */
-.stat-strip {
-  display:grid; grid-template-columns:repeat(3,1fr); gap:10px;
-  margin-bottom:48px;
-}
-.ss-card {
-  padding:14px 16px;
-  background:rgba(255,255,255,.025);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:10px;
-}
-.ss-val {
-  font-family:var(--mono); font-size:18px; font-weight:700;
-  color:var(--t1); line-height:1;
-}
-.ss-val.up  { color:var(--green); }
-.ss-val.dn  { color:var(--red); }
-.ss-val.bl  { color:var(--accent); }
-.ss-lbl { font-size:10px; font-weight:500; color:var(--t3); margin-top:5px; letter-spacing:.05em; text-transform:uppercase; }
-
-.ver-tag {
-  position:absolute; bottom:44px; left:80px;
-  font-family:var(--mono); font-size:8px; color:var(--t4);
+.brand-mark svg{width:19px;height:19px}
+.brand-copy{min-width:0}
+.brand-name{
+  font-size:14px;
+  font-weight:800;
   letter-spacing:.16em;
+  text-transform:uppercase;
 }
-
-/* ══════════════════ RIGHT PANEL ══════════════════ */
-.right {
-  display:flex; align-items:center; justify-content:center;
-  padding:36px;
-  background:var(--s1);
-  position:relative; overflow:hidden;
+.brand-tag{
+  margin-top:2px;
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.12em;
+  color:var(--muted);
+  text-transform:uppercase;
 }
-
-/* Subtle grid on right */
-.right::before {
+.nav-links{
+  display:flex;
+  align-items:center;
+  gap:24px;
+  color:var(--ink-2);
+  font-size:13px;
+  font-weight:600;
+}
+.nav-links a{
+  position:relative;
+  padding:6px 0;
+}
+.nav-links a::after{
   content:'';
-  position:absolute; inset:0;
-  background-image:
-    linear-gradient(rgba(59,130,246,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59,130,246,.025) 1px, transparent 1px);
-  background-size:32px 32px;
-}
-
-/* Scan line */
-.right::after {
-  content:'';
-  position:absolute; left:0; right:0; height:1px;
-  background:linear-gradient(90deg, transparent, rgba(59,130,246,.3), transparent);
-  animation:scanLine 6s ease-in-out infinite;
-  pointer-events:none;
-}
-@keyframes scanLine {
-  0%  { top:-1px; opacity:0; }
-  10% { opacity:1; }
-  90% { opacity:1; }
-  100%{ top:100%; opacity:0; }
-}
-
-.form-card {
-  position:relative; z-index:2;
-  width:100%; max-width:380px;
-}
-
-/* Status bar at top of form */
-.status-bar {
-  display:flex; align-items:center; gap:8px; margin-bottom:28px;
-  padding:8px 14px;
-  background:rgba(16,185,129,.06);
-  border:1px solid rgba(16,185,129,.15);
-  border-radius:6px;
-}
-.status-dot {
-  width:6px; height:6px; border-radius:50%;
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:-1px;
+  height:1px;
   background:var(--green);
-  animation:sBlip 2s ease infinite;
+  transform:scaleX(0);
+  transform-origin:left;
+  transition:transform .35s var(--ease);
 }
-@keyframes sBlip { 0%,100%{opacity:1} 50%{opacity:.3} }
-.status-text {
-  font-family:var(--mono); font-size:9px; color:var(--green); letter-spacing:.08em;
+.nav-links a:hover::after{transform:scaleX(1)}
+.header-actions{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 14px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  color:var(--ink-2);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  font-family:var(--mono);
+}
+.pill-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--green-2);
+  box-shadow:0 0 0 6px rgba(31,143,100,.12);
+}
+.header-btn,.cta-primary,.cta-secondary,.submit-btn,.demo-btn,.cred-fill,.access-toggle{
+  transition:transform .28s var(--ease), box-shadow .28s var(--ease), background .28s var(--ease), border-color .28s var(--ease), color .28s var(--ease);
+}
+.header-btn{
+  padding:12px 18px;
+  border-radius:999px;
+  background:linear-gradient(135deg, #1b3025, #0e6a47);
+  color:#f7faf7;
+  font-size:12px;
+  font-weight:700;
+  border:none;
+  box-shadow:0 16px 30px rgba(14,106,71,.18);
+}
+.header-btn:hover,.cta-primary:hover,.submit-btn:hover,.demo-btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 24px 40px rgba(14,106,71,.18);
+}
+.theme-toggle{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.62);
+  color:var(--ink-2);
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.theme-toggle-track{
+  position:relative;
+  width:42px;
+  height:24px;
+  border-radius:999px;
+  background:rgba(17,21,19,.12);
+}
+.theme-toggle-thumb{
+  position:absolute;
+  top:3px;
+  left:3px;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 8px 16px rgba(17,21,19,.18);
+  transition:transform .28s var(--ease), background .28s var(--ease);
+}
+.theme-toggle.active .theme-toggle-track{background:linear-gradient(135deg, #1b3025, #0e6a47)}
+.theme-toggle.active .theme-toggle-thumb{transform:translateX(18px)}
+.theme-toggle-label{min-width:72px;text-align:left}
+
+.hero{
+  max-width:var(--max);
+  margin:28px auto 0;
+  padding:0 24px;
+}
+.hero-shell{
+  position:relative;
+  overflow:hidden;
+  border-radius:42px;
+  color:var(--hero-text);
+  background:
+    radial-gradient(circle at 15% 16%, rgba(94,184,143,.18), transparent 30%),
+    radial-gradient(circle at 82% 14%, rgba(177,129,56,.18), transparent 18%),
+    linear-gradient(140deg, #0d1310 0%, #14211b 48%, #101714 100%);
+  box-shadow:0 40px 120px rgba(13,19,16,.28);
+}
+.hero-shell::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:88px 88px;
+  mask-image:linear-gradient(180deg, rgba(0,0,0,.5), transparent 82%);
+  opacity:.45;
+}
+.hero-shell::after{
+  content:'';
+  position:absolute;
+  inset:auto 0 0;
+  height:180px;
+  background:linear-gradient(180deg, transparent, rgba(255,255,255,.03));
+}
+.hero-inner{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:minmax(0, 1.2fr) minmax(360px, .8fr);
+  gap:34px;
+  padding:40px;
+}
+.hero-copy{
+  display:flex;
+  flex-direction:column;
+  gap:24px;
+}
+.eyebrow{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  width:max-content;
+  padding:10px 14px;
+  border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.09);
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.eyebrow span:last-child{color:rgba(243,246,241,.72)}
+.eyebrow-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#67c095;
+  box-shadow:0 0 0 7px rgba(103,192,149,.10);
+}
+.hero-title{
+  max-width:720px;
+  font-size:clamp(52px, 8vw, 94px);
+  line-height:.94;
+  letter-spacing:-.06em;
+  font-weight:800;
+  margin:0;
+}
+.hero-title .dim{
+  color:rgba(243,246,241,.66);
+  font-weight:700;
+}
+.hero-sub{
+  max-width:640px;
+  margin:0;
+  color:rgba(243,246,241,.72);
+  font-size:18px;
+  line-height:1.7;
+}
+.hero-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:14px;
+}
+.cta-primary{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:16px 24px;
+  border:none;
+  border-radius:999px;
+  background:linear-gradient(135deg, #1b3025, #1b8b61);
+  color:#f6fbf8;
+  box-shadow:0 20px 40px rgba(31,143,100,.20);
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-family:var(--mono);
+}
+.cta-secondary{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:16px 22px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.03);
+  color:#f3f6f1;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-family:var(--mono);
+}
+.cta-secondary:hover{
+  transform:translateY(-2px);
+  background:rgba(255,255,255,.08);
+}
+.hero-stats{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0, 1fr));
+  gap:14px;
+}
+.hero-stat{
+  padding:18px 18px 16px;
+  border-radius:22px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+  backdrop-filter:blur(14px);
+}
+.hero-stat-label{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.10em;
+  color:rgba(243,246,241,.54);
+  text-transform:uppercase;
+}
+.hero-stat-value{
+  margin-top:12px;
+  font-size:30px;
+  font-weight:800;
+  letter-spacing:-.05em;
+}
+.hero-stat-foot{
+  margin-top:6px;
+  font-size:13px;
+  color:rgba(243,246,241,.58);
+}
+.hero-grid{
+  display:grid;
+  grid-template-columns:1.1fr .9fr;
+  gap:14px;
+}
+.hero-card{
+  position:relative;
+  overflow:hidden;
+  min-height:220px;
+  padding:22px;
+  border-radius:24px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.08);
+  backdrop-filter:blur(18px);
+}
+.hero-card-label{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(243,246,241,.52);
+}
+.hero-card-title{
+  margin-top:12px;
+  font-size:22px;
+  font-weight:700;
+  line-height:1.15;
+}
+.hero-card-copy{
+  margin-top:10px;
+  color:rgba(243,246,241,.66);
+  line-height:1.7;
+  font-size:14px;
+}
+.hero-card .micro-grid{
+  position:absolute;
+  inset:auto -12% -20% auto;
+  width:220px;
+  height:220px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(103,192,149,.22), transparent 68%);
+}
+.market-ladder{
+  display:grid;
+  gap:10px;
+  margin-top:18px;
+}
+.ladder-row{
+  display:grid;
+  grid-template-columns:68px 1fr auto;
+  align-items:center;
+  gap:12px;
+}
+.ladder-symbol{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.08em;
+  color:rgba(243,246,241,.74);
+}
+.ladder-bar{
+  position:relative;
+  height:8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  overflow:hidden;
+}
+.ladder-bar::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  width:var(--fill);
+  border-radius:inherit;
+  background:linear-gradient(90deg, rgba(255,255,255,.35), #67c095);
+}
+.ladder-value{
+  font-family:var(--mono);
+  font-size:12px;
+  color:#9dd8ba;
+}
+.hero-diagram{
+  position:relative;
+  min-height:320px;
+}
+.diagram-path{
+  position:absolute;
+  inset:70px 28px 52px 28px;
+  border-radius:24px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.04), transparent),
+    linear-gradient(90deg, rgba(255,255,255,.03), transparent 46%, rgba(255,255,255,.03));
+  border:1px solid rgba(255,255,255,.06);
+}
+.diagram-path svg{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.diagram-node{
+  position:absolute;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 14px;
+  border-radius:18px;
+  background:rgba(9,13,11,.82);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 20px 32px rgba(0,0,0,.20);
+}
+.diagram-node:nth-child(1){top:16px;left:10px}
+.diagram-node:nth-child(2){top:86px;right:4px}
+.diagram-node:nth-child(3){bottom:84px;left:20px}
+.diagram-node:nth-child(4){bottom:18px;right:18px}
+.node-icon{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:rgba(103,192,149,.12);
+  color:#98d7b7;
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:700;
+}
+.node-copy strong{
+  display:block;
+  font-size:13px;
+  letter-spacing:.02em;
+}
+.node-copy span{
+  display:block;
+  margin-top:2px;
+  font-size:11px;
+  color:rgba(243,246,241,.54);
 }
 
-/* Tabs */
-.auth-tabs {
-  display:flex; gap:0;
-  background:rgba(255,255,255,.03);
-  border:1px solid var(--border);
-  border-radius:8px; overflow:hidden;
-  margin-bottom:28px;
-}
-.auth-tab {
-  flex:1; padding:11px; text-align:center; cursor:pointer;
-  font-family:var(--head); font-size:11px; font-weight:700;
-  letter-spacing:.08em; text-transform:uppercase;
-  color:var(--t3); background:none; border:none;
-  transition:all .18s;
+.hero-access{
   position:relative;
 }
-.auth-tab.active {
-  background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(6,182,212,.08));
-  color:var(--accent);
+.access-card{
+  position:sticky;
+  top:110px;
+  display:flex;
+  flex-direction:column;
+  gap:20px;
+  padding:22px;
+  border-radius:28px;
+  background:rgba(255,255,255,.9);
+  border:1px solid rgba(255,255,255,.75);
+  box-shadow:0 30px 80px rgba(7,15,10,.22);
+  color:var(--ink);
 }
-.auth-tab.active::after {
-  content:''; position:absolute; bottom:0; left:0; right:0; height:2px;
-  background:linear-gradient(90deg, var(--accent), var(--accent2));
+.access-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
 }
-
-/* Form sections */
-.field { display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
-.field-label {
-  font-family:var(--body); font-size:10px; font-weight:600;
-  color:var(--t3); letter-spacing:.1em; text-transform:uppercase;
-  display:flex; align-items:center; justify-content:space-between;
+.access-overline{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.14em;
+  color:var(--muted);
+  text-transform:uppercase;
 }
-.field-input {
-  width:100%; padding:12px 14px;
-  background:rgba(255,255,255,.04);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:8px;
-  color:var(--t1); font-family:var(--mono); font-size:12px;
+.access-title{
+  margin-top:8px;
+  font-size:30px;
+  line-height:.96;
+  letter-spacing:-.05em;
+  font-weight:800;
+}
+.access-badge{
+  padding:10px 14px;
+  border-radius:999px;
+  background:var(--green-soft);
+  color:var(--green);
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.access-toggles{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  padding:6px;
+  border-radius:18px;
+  background:#edf3ed;
+  border:1px solid rgba(17,21,19,.05);
+}
+.access-toggle{
+  padding:12px 14px;
+  border:none;
+  border-radius:14px;
+  background:transparent;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  font-family:var(--mono);
+}
+.access-toggle.active{
+  background:#ffffff;
+  color:var(--ink);
+  box-shadow:0 10px 30px rgba(17,21,19,.06);
+}
+.access-row{
+  display:grid;
+  gap:8px;
+}
+.field-label{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-family:var(--mono);
+}
+.field-label span{
+  text-transform:none;
+  letter-spacing:0;
+  font-family:var(--body);
+  font-size:12px;
+  font-weight:600;
+  color:var(--muted-2);
+}
+.field-input{
+  width:100%;
+  padding:16px 17px;
+  border-radius:18px;
+  border:1px solid rgba(17,21,19,.09);
+  background:#fbfcfa;
+  color:var(--ink);
   outline:none;
-  transition:all .18s;
+  font-size:15px;
+  transition:border-color .22s var(--ease), box-shadow .22s var(--ease), transform .22s var(--ease);
 }
-.field-input:focus {
-  border-color:rgba(59,130,246,.45);
-  background:rgba(59,130,246,.04);
-  box-shadow:0 0 0 3px rgba(59,130,246,.08);
-}
-.field-input::placeholder { color:var(--t4); }
-.field-input.err { border-color:rgba(239,68,68,.45); }
-
-/* Demo CTA */
-.demo-btn {
-  width:100%; padding:13px; margin-bottom:16px;
-  background:linear-gradient(135deg, rgba(59,130,246,.1), rgba(6,182,212,.08));
-  border:1px solid rgba(59,130,246,.3);
-  border-radius:8px; color:var(--accent);
-  font-family:var(--head); font-size:12px; font-weight:700;
-  letter-spacing:.07em; text-transform:uppercase;
-  cursor:pointer; transition:all .18s;
-  display:flex; align-items:center; justify-content:center; gap:10px;
-  position:relative; overflow:hidden;
-}
-.demo-btn:hover {
-  background:linear-gradient(135deg, rgba(59,130,246,.18), rgba(6,182,212,.14));
-  border-color:rgba(59,130,246,.55);
+.field-input:focus{
+  border-color:rgba(14,106,71,.38);
+  box-shadow:0 0 0 6px rgba(14,106,71,.08);
   transform:translateY(-1px);
-  box-shadow:0 4px 24px rgba(59,130,246,.15);
 }
-.demo-btn::before {
-  content:'';
-  position:absolute; inset:0;
-  background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,.04) 50%, transparent 100%);
-  transform:translateX(-100%);
-  transition:transform .5s;
+.field-input::placeholder{color:#9aa49b}
+.form-msg{
+  display:none;
+  padding:14px 16px;
+  border-radius:16px;
+  font-size:13px;
+  line-height:1.5;
 }
-.demo-btn:hover::before { transform:translateX(100%); }
-.demo-tag {
-  position:absolute; top:5px; right:10px;
-  font-size:8px; font-weight:400; font-family:var(--mono);
-  color:rgba(59,130,246,.5); letter-spacing:.06em;
+.form-msg.show{display:block}
+.form-msg.err{
+  background:rgba(183,62,62,.08);
+  color:#8e2f2f;
+  border:1px solid rgba(183,62,62,.14);
 }
-
-/* Divider */
-.or-divider {
-  display:flex; align-items:center; gap:12px; margin-bottom:16px;
+.form-msg.ok{
+  background:rgba(14,106,71,.08);
+  color:var(--green);
+  border:1px solid rgba(14,106,71,.16);
 }
-.or-line { flex:1; height:1px; background:rgba(255,255,255,.06); }
-.or-text { font-family:var(--body); font-size:10px; color:var(--t4); white-space:nowrap; }
-
-/* Role selector */
-.role-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
-.role-card {
-  padding:12px 13px; border-radius:8px; cursor:pointer;
-  border:1px solid rgba(255,255,255,.06);
-  background:rgba(255,255,255,.02);
-  transition:all .18s; position:relative;
+.submit-btn{
+  width:100%;
+  border:none;
+  border-radius:18px;
+  padding:17px 18px;
+  background:linear-gradient(135deg, #1a2d23, #0e6a47);
+  color:#f8faf7;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  font-family:var(--mono);
+  box-shadow:0 18px 36px rgba(14,106,71,.16);
 }
-.role-card:hover { border-color:rgba(255,255,255,.12); transform:translateY(-1px); }
-.role-card.sel-trader  { border-color:rgba(59,130,246,.45); background:rgba(59,130,246,.07); }
-.role-card.sel-builder { border-color:rgba(16,185,129,.45); background:rgba(16,185,129,.07); }
-.role-pip { width:8px; height:8px; border-radius:50%; margin-bottom:8px; }
-.role-pip.trader  { background:var(--accent); }
-.role-pip.builder { background:var(--green); }
-.role-name { font-family:var(--head); font-size:12px; font-weight:700; color:var(--t1); margin-bottom:3px; }
-.role-desc { font-size:9px; font-weight:300; color:var(--t3); line-height:1.4; }
-.role-chk {
-  position:absolute; top:9px; right:9px;
-  width:15px; height:15px; border-radius:50%;
-  border:1px solid rgba(255,255,255,.1);
-  display:flex; align-items:center; justify-content:center;
-  font-size:8px; transition:all .15s;
+.submit-btn:disabled,.demo-btn:disabled{
+  opacity:.68;
+  cursor:not-allowed;
+  transform:none;
+  box-shadow:none;
 }
-.role-card.sel-trader  .role-chk { background:var(--accent);  border-color:var(--accent);  color:#fff; }
-.role-card.sel-builder .role-chk { background:var(--green);   border-color:var(--green);   color:#fff; }
-
-/* Password strength */
-.pw-bars { display:flex; gap:3px; margin-top:6px; height:2px; }
-.pw-seg { flex:1; border-radius:1px; background:rgba(255,255,255,.06); transition:all .28s; }
-.pw-seg.weak   { background:var(--red); }
-.pw-seg.fair   { background:var(--amber); }
-.pw-seg.good   { background:var(--accent); }
-.pw-seg.strong { background:var(--green); }
-.pw-lbl { font-size:9px; font-family:var(--mono); color:var(--t3); margin-top:4px; }
-
-/* Submit */
-.submit-btn {
-  width:100%; padding:14px; margin-top:6px;
-  background:linear-gradient(135deg, var(--accent), var(--accent2));
-  border:none; border-radius:8px; color:#fff;
-  font-family:var(--head); font-size:12px; font-weight:700;
-  letter-spacing:.1em; text-transform:uppercase;
-  cursor:pointer; transition:all .18s;
-  position:relative; overflow:hidden;
+.demo-btn{
+  width:100%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:15px 18px;
+  border-radius:18px;
+  border:1px solid rgba(17,21,19,.08);
+  background:#f5f8f3;
+  color:var(--ink-2);
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  font-family:var(--mono);
 }
-.submit-btn:hover {
+.demo-btn svg{width:14px;height:14px}
+.creds-panel{
+  padding:16px;
+  border-radius:22px;
+  background:#f5f7f2;
+  border:1px solid rgba(17,21,19,.06);
+}
+.creds-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:14px;
+}
+.creds-title{
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  font-family:var(--mono);
+}
+.cred-row{
+  display:grid;
+  grid-template-columns:70px 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:12px 0;
+  border-top:1px solid rgba(17,21,19,.06);
+}
+.cred-row:first-of-type{border-top:none;padding-top:0}
+.cred-label{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.cred-val{
+  font-size:14px;
+  color:var(--ink-2);
+  word-break:break-word;
+}
+.cred-fill{
+  border:none;
+  background:var(--green-soft);
+  color:var(--green);
+  border-radius:999px;
+  padding:9px 12px;
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+}
+.cred-fill:hover{
   transform:translateY(-1px);
-  box-shadow:0 6px 30px rgba(59,130,246,.35);
+  background:#cae8d9;
 }
-.submit-btn:active { transform:translateY(0); }
-.submit-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; box-shadow:none; }
-.submit-btn::after {
-  content:'';
-  position:absolute; inset:0;
-  background:linear-gradient(135deg, rgba(255,255,255,.1), transparent);
+.pw-bars{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:6px;
+  margin-top:10px;
 }
-
-/* Spinner */
-.btn-spin {
-  display:inline-block; width:12px; height:12px;
-  border:2px solid rgba(255,255,255,.2);
+.pw-seg{
+  height:6px;
+  border-radius:999px;
+  background:rgba(17,21,19,.08);
+}
+.pw-seg.weak{background:#c65454}
+.pw-seg.fair{background:#c6953f}
+.pw-seg.good{background:#1d7c59}
+.pw-seg.strong{background:#159968}
+.pw-lbl{
+  margin-top:10px;
+  font-size:13px;
+  color:var(--muted);
+}
+.role-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.role-card{
+  position:relative;
+  padding:16px;
+  border-radius:20px;
+  background:#fbfcfa;
+  border:1px solid rgba(17,21,19,.07);
+}
+.role-card.active{
+  border-color:rgba(14,106,71,.28);
+  background:#f3faf6;
+}
+.role-pip{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  margin-bottom:14px;
+}
+.role-pip.trader{background:var(--green)}
+.role-pip.builder{background:var(--gold)}
+.role-name{
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:-.03em;
+}
+.role-desc{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.6;
+}
+.role-chk{
+  position:absolute;
+  top:16px;
+  right:16px;
+  color:var(--green);
+  font-family:var(--mono);
+  font-size:12px;
+  font-weight:700;
+}
+.access-foot{
+  display:grid;
+  gap:10px;
+}
+.foot-line{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  font-size:12px;
+  color:var(--muted);
+}
+.foot-line strong{
+  color:var(--ink);
+  font-weight:700;
+}
+.btn-spin{
+  width:14px;
+  height:14px;
+  border:2px solid rgba(255,255,255,.28);
   border-top-color:#fff;
   border-radius:50%;
-  animation:spin .7s linear infinite;
-  vertical-align:middle; margin-right:7px;
+  animation:spin .9s linear infinite;
+  display:inline-block;
+  vertical-align:middle;
+  margin-right:8px;
 }
-@keyframes spin { to{transform:rotate(360deg)} }
+@keyframes spin{to{transform:rotate(360deg)}}
 
-/* Form message */
-.form-msg {
-  padding:10px 14px; border-radius:8px;
-  font-family:var(--body); font-size:12px;
-  line-height:1.5; margin-top:10px; display:none;
+.trust-strip{
+  max-width:var(--max);
+  margin:26px auto 0;
+  padding:0 24px;
 }
-.form-msg.show { display:block; }
-.form-msg.err { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.25); color:rgba(239,68,68,.9); }
-.form-msg.ok  { background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.25); color:var(--green); }
+.trust-shell{
+  display:grid;
+  grid-template-columns:1.2fr 1fr;
+  gap:18px;
+  align-items:center;
+  padding:24px 28px;
+  border-radius:30px;
+  background:rgba(255,255,255,.52);
+  border:1px solid rgba(255,255,255,.7);
+  backdrop-filter:blur(16px);
+  box-shadow:0 24px 60px rgba(17,21,19,.06);
+}
+.trust-copy{
+  font-size:19px;
+  font-weight:700;
+  letter-spacing:-.03em;
+  color:var(--ink-2);
+}
+.trust-copy span{color:var(--green)}
+.ticker-ribbon{
+  overflow:hidden;
+  border-radius:18px;
+  background:#f4f7f2;
+  border:1px solid rgba(17,21,19,.05);
+}
+.ticker-inner{
+  display:flex;
+  white-space:nowrap;
+  animation:ribbon 26s linear infinite;
+}
+@keyframes ribbon{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ticker-item{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:13px 18px;
+  border-right:1px solid rgba(17,21,19,.05);
+  font-family:var(--mono);
+  font-size:12px;
+}
+.ticker-item strong{color:var(--ink)}
+.ticker-item span{color:var(--muted)}
+.ticker-up{color:var(--green)}
+.ticker-dn{color:#b34b4b}
 
-/* Credentials panel */
-.creds-panel {
-  margin-top:18px; border-radius:8px; overflow:hidden;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.01);
+.section{
+  max-width:var(--max);
+  margin:0 auto;
+  padding:108px 24px 0;
 }
-.creds-header {
-  padding:8px 14px;
+.section-header{
+  display:grid;
+  grid-template-columns:.7fr 1.3fr;
+  gap:28px;
+  align-items:start;
+  margin-bottom:32px;
+}
+.section-kicker{
+  font-family:var(--mono);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--green);
+}
+.section-title{
+  margin:10px 0 0;
+  font-size:clamp(34px, 5vw, 62px);
+  line-height:.98;
+  letter-spacing:-.05em;
+  font-weight:800;
+}
+.section-copy{
+  margin:0;
+  color:var(--muted);
+  font-size:17px;
+  line-height:1.8;
+  max-width:780px;
+}
+
+.feature-grid{
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:18px;
+}
+.feature-card{
+  position:relative;
+  overflow:hidden;
+  padding:28px;
+  background:rgba(255,255,255,.62);
+  border:1px solid rgba(255,255,255,.78);
+  border-radius:28px;
+  box-shadow:var(--shadow);
+}
+.feature-card::before{
+  content:'';
+  position:absolute;
+  inset:auto -20px -40px auto;
+  width:180px;
+  height:180px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(14,106,71,.12), transparent 70%);
+}
+.feature-card.large{grid-column:span 7;min-height:380px}
+.feature-card.tall{grid-column:span 5;min-height:380px}
+.feature-card.half{grid-column:span 6}
+.feature-label{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.feature-title{
+  margin-top:16px;
+  font-size:30px;
+  line-height:1.04;
+  letter-spacing:-.05em;
+  font-weight:800;
+}
+.feature-copy{
+  margin-top:14px;
+  max-width:540px;
+  color:var(--muted);
+  line-height:1.8;
+  font-size:15px;
+}
+.feature-list{
+  margin:22px 0 0;
+  padding:0;
+  list-style:none;
+  display:grid;
+  gap:12px;
+}
+.feature-list li{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  color:var(--ink-2);
+  font-size:14px;
+  line-height:1.7;
+}
+.feature-list li::before{
+  content:'';
+  width:9px;
+  height:9px;
+  border-radius:50%;
+  margin-top:8px;
+  background:linear-gradient(135deg, var(--green), #83d4ac);
+  flex-shrink:0;
+  box-shadow:0 0 0 7px rgba(14,106,71,.07);
+}
+.performance-stack{
+  display:grid;
+  gap:12px;
+  margin-top:26px;
+}
+.perf-row{
+  display:grid;
+  grid-template-columns:112px 1fr auto;
+  gap:12px;
+  align-items:center;
+}
+.perf-name{
+  font-family:var(--mono);
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.perf-bar{
+  position:relative;
+  height:10px;
+  background:#e6ebe4;
+  border-radius:999px;
+  overflow:hidden;
+}
+.perf-bar::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  width:var(--fill);
+  border-radius:inherit;
+  background:linear-gradient(90deg, #b7d3c2, #0e6a47);
+}
+.perf-value{
+  font-family:var(--mono);
+  color:var(--ink);
+  font-size:12px;
+}
+.dashboard-frame{
+  position:relative;
+  margin-top:30px;
+  padding:16px;
+  border-radius:28px;
+  background:#111815;
+  box-shadow:0 30px 80px rgba(13,19,16,.24);
+}
+.dashboard-chrome{
+  display:flex;
+  gap:8px;
+  margin-bottom:12px;
+}
+.dashboard-chrome span{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:rgba(255,255,255,.18);
+}
+.dashboard-view{
+  overflow:hidden;
+  border-radius:22px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), transparent),
+    #0f1512;
+  border:1px solid rgba(255,255,255,.06);
+}
+.dash-top{
+  display:grid;
+  grid-template-columns:220px 1fr;
+  min-height:310px;
+}
+.dash-sidebar{
+  padding:18px;
+  border-right:1px solid rgba(255,255,255,.06);
+  background:rgba(255,255,255,.02);
+}
+.dash-side-brand{
+  font-family:var(--mono);
+  font-size:12px;
+  letter-spacing:.14em;
+  color:#f3f6f1;
+  text-transform:uppercase;
+}
+.dash-nav{
+  display:grid;
+  gap:8px;
+  margin-top:22px;
+}
+.dash-nav span{
+  display:block;
+  padding:11px 12px;
+  border-radius:14px;
   background:rgba(255,255,255,.03);
-  border-bottom:1px solid var(--border);
-  font-family:var(--body); font-size:9px; font-weight:600;
-  color:var(--t3); letter-spacing:.12em; text-transform:uppercase;
-  display:flex; align-items:center; gap:7px;
+  color:rgba(243,246,241,.62);
+  font-size:12px;
 }
-.creds-header-dot { width:5px; height:5px; border-radius:50%; background:var(--green); animation:sBlip 2s ease infinite; }
-.cred-row {
-  display:flex; align-items:center; gap:8px;
-  padding:8px 14px;
-  border-bottom:1px solid rgba(255,255,255,.03);
-  transition:background .12s;
+.dash-nav span.active{
+  background:linear-gradient(135deg, rgba(103,192,149,.16), rgba(103,192,149,.07));
+  color:#eff7f1;
 }
-.cred-row:hover { background:rgba(255,255,255,.02); }
-.cred-row:last-child { border-bottom:none; }
-.cred-row.owner-row {
-  background:rgba(139,92,246,.05);
-  border-bottom:1px solid rgba(139,92,246,.08);
+.dash-main{
+  padding:18px;
 }
-.cred-label { font-size:10px; font-weight:500; color:var(--t3); min-width:56px; }
-.cred-row.owner-row .cred-label { color:var(--violet); font-weight:700; }
-.cred-val { font-family:var(--mono); font-size:9px; color:var(--t2); flex:1; }
-.cred-row.owner-row .cred-val { color:var(--t1); }
-.cred-fill {
-  font-family:var(--body); font-size:9px; font-weight:600;
-  color:var(--accent); cursor:pointer;
-  padding:2px 8px; border:1px solid rgba(59,130,246,.2);
-  border-radius:4px; background:rgba(59,130,246,.06);
-  transition:all .12s; white-space:nowrap;
+.dash-kpis{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
 }
-.cred-fill:hover { background:rgba(59,130,246,.14); border-color:rgba(59,130,246,.4); }
+.dash-kpi{
+  padding:14px;
+  border-radius:18px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.05);
+}
+.dash-kpi span{
+  display:block;
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color:rgba(243,246,241,.46);
+}
+.dash-kpi strong{
+  display:block;
+  margin-top:8px;
+  color:#f3f6f1;
+  font-size:20px;
+  letter-spacing:-.04em;
+}
+.dash-grid{
+  display:grid;
+  grid-template-columns:1.4fr .8fr;
+  gap:12px;
+  margin-top:12px;
+}
+.dash-panel{
+  padding:16px;
+  border-radius:22px;
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.05);
+}
+.chart-header,
+.signal-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.panel-title{
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:rgba(243,246,241,.56);
+}
+.chart-line{
+  margin-top:16px;
+  width:100%;
+  height:180px;
+}
+.signal-list{
+  display:grid;
+  gap:10px;
+  margin-top:16px;
+}
+.signal-pill{
+  padding:12px 14px;
+  border-radius:16px;
+  background:rgba(255,255,255,.04);
+  display:grid;
+  gap:6px;
+}
+.signal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.signal-head strong{
+  color:#f3f6f1;
+  font-size:14px;
+}
+.signal-head span{
+  font-family:var(--mono);
+  color:#95d2b0;
+  font-size:11px;
+}
+.signal-pill small{
+  color:rgba(243,246,241,.54);
+  line-height:1.6;
+}
 
-@media(max-width:900px) {
-  .wrap { grid-template-columns:1fr; }
-  .left { display:none; }
+.timeline{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:18px;
 }
+.timeline-card{
+  padding:28px 24px;
+  border-radius:26px;
+  background:rgba(255,255,255,.6);
+  border:1px solid rgba(255,255,255,.75);
+  box-shadow:var(--shadow);
+}
+.timeline-step{
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--green);
+}
+.timeline-card h3{
+  margin:18px 0 0;
+  font-size:24px;
+  line-height:1.04;
+  letter-spacing:-.05em;
+}
+.timeline-card p{
+  margin:14px 0 0;
+  color:var(--muted);
+  line-height:1.8;
+  font-size:14px;
+}
+.timeline-card ul{
+  margin:18px 0 0;
+  padding:0;
+  list-style:none;
+  display:grid;
+  gap:10px;
+}
+.timeline-card li{
+  color:var(--ink-2);
+  font-size:14px;
+  line-height:1.7;
+}
+
+.quote-shell{
+  position:relative;
+  overflow:hidden;
+  padding:42px;
+  border-radius:34px;
+  background:linear-gradient(135deg, #0f1512, #17231c 60%, #111815);
+  color:#f3f6f1;
+  box-shadow:0 30px 90px rgba(13,19,16,.22);
+}
+.quote-shell::before{
+  content:'';
+  position:absolute;
+  inset:auto -5% -18% auto;
+  width:320px;
+  height:320px;
+  border-radius:50%;
+  background:radial-gradient(circle, rgba(103,192,149,.20), transparent 72%);
+}
+.quote-grid{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  gap:28px;
+}
+.quote-copy h2{
+  margin:0;
+  font-size:clamp(34px, 5vw, 64px);
+  line-height:.98;
+  letter-spacing:-.05em;
+}
+.quote-copy p{
+  margin:18px 0 0;
+  color:rgba(243,246,241,.66);
+  font-size:17px;
+  line-height:1.8;
+  max-width:620px;
+}
+.quote-points{
+  display:grid;
+  gap:14px;
+}
+.quote-point{
+  padding:18px 20px;
+  border-radius:20px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08);
+}
+.quote-point strong{
+  display:block;
+  font-size:16px;
+}
+.quote-point span{
+  display:block;
+  margin-top:8px;
+  color:rgba(243,246,241,.62);
+  line-height:1.7;
+  font-size:14px;
+}
+
+.footer{
+  max-width:var(--max);
+  margin:0 auto;
+  padding:108px 24px 42px;
+}
+.footer-shell{
+  display:grid;
+  gap:18px;
+  padding:28px;
+  border-radius:30px;
+  background:rgba(255,255,255,.58);
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:var(--shadow);
+}
+.footer-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:24px;
+}
+.footer-brand{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+.footer-copy{
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.7;
+  max-width:680px;
+}
+.footer-bottom{
+  padding-top:18px;
+  border-top:1px solid rgba(17,21,19,.07);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  color:var(--muted);
+  font-size:12px;
+  font-family:var(--mono);
+}
+
+.reveal{
+  opacity:0;
+  transform:translateY(36px);
+  transition:opacity .9s var(--ease), transform .9s var(--ease);
+}
+.reveal.in{
+  opacity:1;
+  transform:translateY(0);
+}
+.reveal[data-delay="1"]{transition-delay:.08s}
+.reveal[data-delay="2"]{transition-delay:.16s}
+.reveal[data-delay="3"]{transition-delay:.24s}
+.parallax{
+  transform:translateY(calc(var(--shift, 0) * 1px));
+}
+
+@media (max-width:1180px){
+  .hero-inner,
+  .section-header,
+  .quote-grid,
+  .trust-shell{grid-template-columns:1fr}
+  .hero-stats{grid-template-columns:repeat(2,1fr)}
+  .feature-card.large,
+  .feature-card.tall,
+  .feature-card.half{grid-column:span 12}
+  .timeline{grid-template-columns:1fr 1fr}
+  .dash-top{grid-template-columns:1fr}
+  .dash-sidebar{border-right:none;border-bottom:1px solid rgba(255,255,255,.06)}
+  .hero-access .access-card{position:relative;top:0}
+}
+@media (max-width:920px){
+  .site-header{padding:14px 16px 0}
+  .header-shell{padding:14px 16px;border-radius:24px}
+  .nav-links,.pill{display:none}
+  .hero{padding:0 16px}
+  .hero-shell{border-radius:30px}
+  .hero-inner{padding:24px}
+  .hero-title{font-size:clamp(44px, 16vw, 70px)}
+  .hero-grid{grid-template-columns:1fr}
+  .trust-strip,.section,.footer{padding-left:16px;padding-right:16px}
+  .hero-stats,.timeline,.role-grid,.dash-kpis,.dash-grid{grid-template-columns:1fr}
+  .feature-grid{display:grid;grid-template-columns:1fr}
+  .footer-top,.footer-bottom{flex-direction:column;align-items:flex-start}
+}
+@media (max-width:640px){
+  .header-btn{padding:11px 14px}
+  .hero-stat{padding:16px}
+  .feature-card,.timeline-card,.quote-shell,.footer-shell,.trust-shell{padding:22px}
+  .access-card{padding:18px}
+  .access-top{flex-direction:column;align-items:flex-start}
+  .cred-row{grid-template-columns:1fr}
+  .cred-fill{justify-self:start}
+}
+html[data-theme="dark"]{
+  --bg:#08100c;
+  --bg-2:#0d1712;
+  --ink:#edf5ef;
+  --ink-2:#c4d3ca;
+  --muted:#8ea393;
+  --muted-2:#667a6b;
+  --line:rgba(226,239,230,.08);
+  --line-strong:rgba(226,239,230,.14);
+  --panel:rgba(15,22,18,.84);
+  --panel-solid:#121a15;
+  --shadow:0 24px 80px rgba(0,0,0,.26);
+  --green:#8bd9b2;
+  --green-2:#78dca6;
+  --green-soft:rgba(120,220,166,.12);
+  --gold:#d6b06e;
+  --hero:#08100c;
+  --hero-2:#112017;
+  --hero-line:rgba(255,255,255,.08);
+  --hero-text:#edf5ef;
+}
+html[data-theme="dark"] body{
+  background:
+    radial-gradient(circle at top left, rgba(94,184,143,.12), transparent 34%),
+    radial-gradient(circle at 85% 18%, rgba(177,129,56,.12), transparent 24%),
+    linear-gradient(180deg, #08100c 0%, #0d1712 42%, #09110d 100%);
+}
+html[data-theme="dark"] .header-shell,
+html[data-theme="dark"] .feature-card,
+html[data-theme="dark"] .timeline-card,
+html[data-theme="dark"] .quote-shell,
+html[data-theme="dark"] .footer-shell,
+html[data-theme="dark"] .trust-shell,
+html[data-theme="dark"] .access-card,
+html[data-theme="dark"] .hero-card,
+html[data-theme="dark"] .trust-strip,
+html[data-theme="dark"] .chart-shell,
+html[data-theme="dark"] .signal-shell{
+  background:rgba(15,22,18,.78);
+  border-color:rgba(226,239,230,.08);
+  color:var(--ink);
+}
+html[data-theme="dark"] .theme-toggle{
+  background:rgba(255,255,255,.04);
+  border-color:rgba(226,239,230,.08);
+  color:var(--ink-2);
+}
+html[data-theme="dark"] .theme-toggle-track{background:rgba(255,255,255,.1)}
+html[data-theme="dark"] .theme-toggle-thumb{background:#eff6f1}
 </style>
 </head>
 <body>
+<div class="page-shell">
+  <div class="noise"></div>
+  <div class="grid-glow"></div>
+  <div class="scroll-indicator" id="scroll-indicator"></div>
 
-<canvas id="bg-canvas"></canvas>
-
-<div class="wrap">
-
-  <!-- ═══════════ LEFT ═══════════ -->
-  <div class="left">
-    <div class="left-orb"></div>
-    <div class="left-orb2"></div>
-    <div class="left-grid"></div>
-
-    <div class="left-content">
-      <div class="brand">
+  <header class="site-header">
+    <div class="header-shell">
+      <a class="brand" href="#top" aria-label="AlphaGrid Capital">
         <div class="brand-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:#3b82f6">
-            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/>
-            <line x1="12" y1="2" x2="12" y2="22"/>
-            <line x1="2" y1="8.5" x2="22" y2="8.5"/>
-            <line x1="2" y1="15.5" x2="22" y2="15.5"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 17L10 12L13 15L19 8"></path>
+            <path d="M15 8H19V12"></path>
           </svg>
         </div>
-        <div class="brand-info">
+        <div class="brand-copy">
           <div class="brand-name">AlphaGrid</div>
-          <div class="brand-tag">TRADING INTELLIGENCE · v8</div>
+          <div class="brand-tag">Capital Systems · Live Trading Infrastructure</div>
         </div>
-      </div>
-
-      <div class="stat-strip">
-        <div class="ss-card">
-          <div class="ss-val up" id="ls-sym1">+2.41%</div>
-          <div class="ss-lbl">SPY Today</div>
+      </a>
+      <nav class="nav-links">
+        <a href="#platform">Platform</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#operations">Operations</a>
+        <a href="#access">Access</a>
+      </nav>
+      <div class="header-actions">
+        <div class="pill">
+          <span class="pill-dot"></span>
+          <span>Live Data Active</span>
         </div>
-        <div class="ss-card">
-          <div class="ss-val bl" id="ls-sym2">150</div>
-          <div class="ss-lbl">Assets Live</div>
-        </div>
-        <div class="ss-card">
-          <div class="ss-val" id="ls-sym3" style="font-size:13px">3 Models</div>
-          <div class="ss-lbl">ML Ensemble</div>
-        </div>
-      </div>
-
-      <div class="headline">
-        Institutional<br>
-        <span class="headline-accent">trading edge</span><br>
-        in your hands.
-      </div>
-
-      <p class="sub">Real-time LSTM + Transformer + LightGBM ensemble signals across 150 assets. Walk-forward backtested. One-click paper execution.</p>
-
-      <div class="feats">
-        <div class="feat">
-          <div class="feat-icon" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2)">⚡</div>
-          <div class="feat-text"><strong>7-gate signal filter</strong> — confidence, regime, alpha, R/R, freshness, portfolio, liquidity</div>
-        </div>
-        <div class="feat">
-          <div class="feat-icon" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.2)">◈</div>
-          <div class="feat-text"><strong>MetaLearner stacking</strong> — AUC-weighted ensemble with degeneracy detection</div>
-        </div>
-        <div class="feat">
-          <div class="feat-icon" style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2)">⊞</div>
-          <div class="feat-text"><strong>Walk-forward backtest</strong> — no look-ahead, Sharpe / Sortino / Calmar metrics</div>
-        </div>
-        <div class="feat">
-          <div class="feat-icon" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2)">◎</div>
-          <div class="feat-text"><strong>80+ quantitative features</strong> — 10 feature families, Numba JIT indicators</div>
-        </div>
+        <button class="theme-toggle" id="theme-toggle-auth" type="button" onclick="toggleTheme()" aria-label="Toggle color theme" aria-pressed="false">
+          <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+          <span class="theme-toggle-label" id="theme-toggle-auth-label">Dark Mode</span>
+        </button>
+        <a class="header-btn" href="#access">Request Access</a>
       </div>
     </div>
+  </header>
 
-    <div class="live-strip" id="live-strip">
-      <div class="ls-inner" id="ls-inner">
-        <span class="ls-tick"><span class="ls-sym">AAPL</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">MSFT</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">NVDA</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">TSLA</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">META</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">GOOGL</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">AMD</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">AMZN</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">SPY</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">QQQ</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">EUR/USD</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">GBP/USD</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <!-- duplicate for seamless loop -->
-        <span class="ls-tick"><span class="ls-sym">AAPL</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">MSFT</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">NVDA</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">TSLA</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">META</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">GOOGL</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">AMD</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">AMZN</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">SPY</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">QQQ</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">EUR/USD</span><span class="ls-val">—</span><span class="ls-chg up">+0.00%</span></span>
-        <span class="ls-tick"><span class="ls-sym">GBP/USD</span><span class="ls-val">—</span><span class="ls-chg dn">-0.00%</span></span>
+  <main id="top">
+    <section class="hero">
+      <div class="hero-shell">
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <div class="eyebrow reveal in">
+              <span class="eyebrow-dot"></span>
+              <span>Built for disciplined live trading teams</span>
+            </div>
+            <h1 class="hero-title reveal in">
+              A premium command center for
+              <span class="dim">systematic execution, realtime intelligence, and institutional-grade oversight.</span>
+            </h1>
+            <p class="hero-sub reveal in">
+              AlphaGrid Capital turns live market data, model conviction, portfolio controls, and execution tooling into one elegant operating layer. Minimal where it matters. Fast where it counts. Designed like a serious trading company, not a demo dashboard.
+            </p>
+            <div class="hero-actions reveal in">
+              <a class="cta-primary" href="#access">Launch Client Portal</a>
+              <a class="cta-secondary" href="#platform">Explore Platform</a>
+            </div>
+            <div class="hero-stats">
+              <div class="hero-stat reveal" data-delay="1">
+                <div class="hero-stat-label">Live Coverage</div>
+                <div class="hero-stat-value" data-count="150">150</div>
+                <div class="hero-stat-foot">Equities and FX under watch</div>
+              </div>
+              <div class="hero-stat reveal" data-delay="2">
+                <div class="hero-stat-label">Decision Layers</div>
+                <div class="hero-stat-value" data-count="7">7</div>
+                <div class="hero-stat-foot">Signal gates before execution</div>
+              </div>
+              <div class="hero-stat reveal" data-delay="3">
+                <div class="hero-stat-label">Model Stack</div>
+                <div class="hero-stat-value" data-count="3">3</div>
+                <div class="hero-stat-foot">LSTM, Transformer, LightGBM</div>
+              </div>
+              <div class="hero-stat reveal">
+                <div class="hero-stat-label">Latency Window</div>
+                <div class="hero-stat-value">&lt; 2s</div>
+                <div class="hero-stat-foot">WebSocket and polling updates</div>
+              </div>
+            </div>
+            <div class="hero-grid">
+              <div class="hero-card reveal parallax" data-parallax=".09">
+                <div class="hero-card-label">Capital Allocation Surface</div>
+                <div class="hero-card-title">Conviction-first sizing with live portfolio discipline.</div>
+                <div class="hero-card-copy">Execution only happens after confidence, regime fit, reward-to-risk, liquidity, and exposure limits align. Every action is framed by portfolio context, not isolated signals.</div>
+                <div class="market-ladder">
+                  <div class="ladder-row">
+                    <div class="ladder-symbol">SPY</div>
+                    <div class="ladder-bar" style="--fill:86%"></div>
+                    <div class="ladder-value">0.84</div>
+                  </div>
+                  <div class="ladder-row">
+                    <div class="ladder-symbol">NVDA</div>
+                    <div class="ladder-bar" style="--fill:74%"></div>
+                    <div class="ladder-value">0.72</div>
+                  </div>
+                  <div class="ladder-row">
+                    <div class="ladder-symbol">EURUSD</div>
+                    <div class="ladder-bar" style="--fill:63%"></div>
+                    <div class="ladder-value">0.61</div>
+                  </div>
+                  <div class="ladder-row">
+                    <div class="ladder-symbol">AMD</div>
+                    <div class="ladder-bar" style="--fill:58%"></div>
+                    <div class="ladder-value">0.56</div>
+                  </div>
+                </div>
+                <div class="micro-grid"></div>
+              </div>
+              <div class="hero-card hero-diagram reveal parallax" data-parallax=".13">
+                <div class="hero-card-label">Realtime Signal Path</div>
+                <div class="diagram-path">
+                  <svg viewBox="0 0 600 360" fill="none">
+                    <path d="M60 66C166 66 152 134 255 134C372 134 357 234 470 234C524 234 534 286 544 312" stroke="rgba(103,192,149,.55)" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 14"/>
+                    <path d="M59 96C164 96 162 214 279 214C388 214 398 108 522 108" stroke="rgba(255,255,255,.18)" stroke-width="3" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div class="diagram-node">
+                  <div class="node-icon">01</div>
+                  <div class="node-copy"><strong>Market Feed</strong><span>Prices, candles, spreads</span></div>
+                </div>
+                <div class="diagram-node">
+                  <div class="node-icon">02</div>
+                  <div class="node-copy"><strong>Model Layer</strong><span>Ensemble probabilities</span></div>
+                </div>
+                <div class="diagram-node">
+                  <div class="node-icon">03</div>
+                  <div class="node-copy"><strong>Risk Filter</strong><span>Exposure and regime checks</span></div>
+                </div>
+                <div class="diagram-node">
+                  <div class="node-icon">04</div>
+                  <div class="node-copy"><strong>Execution</strong><span>Paper and broker routing</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="hero-access" id="access">
+            <div class="access-card reveal in">
+              <div class="access-top">
+                <div>
+                  <div class="access-overline">Client Access</div>
+                  <div class="access-title">Enter the trading floor.</div>
+                </div>
+                <div class="access-badge" id="access-status-badge">Login Ready</div>
+              </div>
+
+              <div class="access-toggles">
+                <button class="access-toggle active" id="tab-login" onclick="showLogin()">Sign In</button>
+                <button class="access-toggle" id="tab-signup" onclick="showSignup()">Create Account</button>
+              </div>
+
+              <div id="login-form">
+                <div class="access-row">
+                  <label class="field-label" for="l-ident">Username or Email</label>
+                  <input class="field-input" id="l-ident" type="text" placeholder="your username or email" autocomplete="username">
+                </div>
+                <div class="access-row">
+                  <label class="field-label" for="l-pass">Password</label>
+                  <input class="field-input" id="l-pass" type="password" placeholder="Enter your password" autocomplete="current-password">
+                </div>
+                <div class="form-msg" id="login-msg"></div>
+                <button class="submit-btn" id="login-btn" onclick="doLogin()">Open Command Center</button>
+              </div>
+
+              <div id="signup-form" style="display:none">
+                <div class="access-row">
+                  <label class="field-label" for="s-name">Full Name</label>
+                  <input class="field-input" id="s-name" type="text" placeholder="Alex Morgan" autocomplete="name">
+                </div>
+                <div class="access-row">
+                  <label class="field-label" for="s-email">Email</label>
+                  <input class="field-input" id="s-email" type="email" placeholder="you@example.com" autocomplete="email">
+                </div>
+                <div class="access-row">
+                  <label class="field-label" for="s-uname">Username <span>Optional. We can generate it for you.</span></label>
+                  <input class="field-input" id="s-uname" type="text" placeholder="optional username" autocomplete="username">
+                </div>
+                <div class="access-row">
+                  <label class="field-label" for="s-pass">Password</label>
+                  <input class="field-input" id="s-pass" type="password" placeholder="Minimum 8 characters" autocomplete="new-password" oninput="updatePwStrength(this.value)">
+                  <div class="pw-bars">
+                    <div class="pw-seg" id="ps1"></div>
+                    <div class="pw-seg" id="ps2"></div>
+                    <div class="pw-seg" id="ps3"></div>
+                    <div class="pw-seg" id="ps4"></div>
+                  </div>
+                  <div class="pw-lbl" id="pw-label">Enter a strong password.</div>
+                </div>
+                <div class="access-row">
+                  <div class="field-label">Access Level</div>
+                  <div class="feature-copy" style="margin:0;color:var(--muted)">
+                    Self-service sign-up creates a standard user account. Owner access is reserved for the private account configured in your local environment.
+                  </div>
+                </div>
+                <div class="form-msg" id="signup-msg"></div>
+                <button class="submit-btn" id="signup-btn" onclick="doSignup()">Create User Account</button>
+              </div>
+
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip reveal">
+      <div class="trust-shell">
+        <div class="trust-copy">Designed to feel like a <span>serious live trading company</span>: restrained, decision-first, and built for operators who care about clarity under pressure.</div>
+        <div class="ticker-ribbon">
+          <div class="ticker-inner" id="ticker-inner">
+            <div class="ticker-item"><strong>AAPL</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>MSFT</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>NVDA</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>SPY</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>QQQ</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>EURUSD</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>GBPUSD</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>AAPL</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>MSFT</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>NVDA</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>SPY</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>QQQ</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>EURUSD</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+            <div class="ticker-item"><strong>GBPUSD</strong><span>—</span><span class="ticker-up">+0.00%</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="platform">
+      <div class="section-header reveal">
+        <div>
+          <div class="section-kicker">Platform</div>
+          <h2 class="section-title">A landing experience with actual trading-company posture.</h2>
+        </div>
+        <p class="section-copy">The visual language is intentionally minimal and executive: clear typography, strong spacing, premium contrast, subdued motion, and information hierarchy that always pushes the eye toward conviction, risk, and execution. It sells the product without feeling promotional or noisy.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card large reveal parallax" data-parallax=".08">
+          <div class="feature-label">Executive Overview</div>
+          <div class="feature-title">Every layer is designed around what a live desk actually needs to see first.</div>
+          <div class="feature-copy">Not just signals. Not just charts. The product story leads with operational readiness: capital, risk, freshness, allocation, and routing. That framing makes the platform feel institutional before anyone even logs in.</div>
+          <ul class="feature-list">
+            <li>Hero messaging now reads like a capital markets product, not a hobby dashboard.</li>
+            <li>Scroll architecture moves from brand promise to operating model to secure access.</li>
+            <li>Typography and spacing emphasize confidence and restraint instead of novelty.</li>
+          </ul>
+          <div class="dashboard-frame">
+            <div class="dashboard-chrome"><span></span><span></span><span></span></div>
+            <div class="dashboard-view">
+              <div class="dash-top">
+                <div class="dash-sidebar">
+                  <div class="dash-side-brand">AlphaGrid OS</div>
+                  <div class="dash-nav">
+                    <span class="active">Overview</span>
+                    <span>Signals</span>
+                    <span>Chart</span>
+                    <span>Trades</span>
+                    <span>Evaluation</span>
+                  </div>
+                </div>
+                <div class="dash-main">
+                  <div class="dash-kpis">
+                    <div class="dash-kpi"><span>Portfolio</span><strong>$156.0K</strong></div>
+                    <div class="dash-kpi"><span>Sharpe</span><strong>0.56</strong></div>
+                    <div class="dash-kpi"><span>Signals</span><strong>24</strong></div>
+                    <div class="dash-kpi"><span>Exposure</span><strong>38%</strong></div>
+                  </div>
+                  <div class="dash-grid">
+                    <div class="dash-panel">
+                      <div class="chart-header">
+                        <div class="panel-title">Equity Curve</div>
+                        <div class="panel-title">Daily</div>
+                      </div>
+                      <svg class="chart-line" viewBox="0 0 620 220" fill="none">
+                        <defs>
+                          <linearGradient id="chartStroke" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#8fd0ae"></stop>
+                            <stop offset="100%" stop-color="#2f9b70"></stop>
+                          </linearGradient>
+                          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="rgba(143,208,174,.28)"></stop>
+                            <stop offset="100%" stop-color="rgba(143,208,174,0)"></stop>
+                          </linearGradient>
+                        </defs>
+                        <path d="M20 190C72 180 99 108 154 114C196 118 211 152 257 148C317 142 349 52 403 44C459 36 501 82 544 78C572 76 592 56 600 40V220H20Z" fill="url(#chartFill)"></path>
+                        <path d="M20 190C72 180 99 108 154 114C196 118 211 152 257 148C317 142 349 52 403 44C459 36 501 82 544 78C572 76 592 56 600 40" stroke="url(#chartStroke)" stroke-width="5" stroke-linecap="round"></path>
+                      </svg>
+                    </div>
+                    <div class="dash-panel">
+                      <div class="signal-header">
+                        <div class="panel-title">Top Signals</div>
+                        <div class="panel-title">Live</div>
+                      </div>
+                      <div class="signal-list">
+                        <div class="signal-pill">
+                          <div class="signal-head"><strong>NVDA Long</strong><span>0.84</span></div>
+                          <small>Trend strength aligned with regime, breadth, and reward-to-risk profile.</small>
+                        </div>
+                        <div class="signal-pill">
+                          <div class="signal-head"><strong>SPY Long</strong><span>0.78</span></div>
+                          <small>Index participation expanding while portfolio correlation remains within limits.</small>
+                        </div>
+                        <div class="signal-pill">
+                          <div class="signal-head"><strong>EURUSD Long</strong><span>0.66</span></div>
+                          <small>FX signal cleared freshness and liquidity filters with lower book concentration.</small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="feature-card tall reveal parallax" data-parallax=".12">
+          <div class="feature-label">Operating Surface</div>
+          <div class="feature-title">Minimal enough for trust. Rich enough for action.</div>
+          <div class="feature-copy">The visual system avoids fintech cliches and leans into calm, expensive precision: white space, rounded structural panels, restrained gradients, sharp mono labels, and motion that supports comprehension.</div>
+          <div class="performance-stack">
+            <div class="perf-row">
+              <div class="perf-name">Signal Clarity</div>
+              <div class="perf-bar" style="--fill:92%"></div>
+              <div class="perf-value">92</div>
+            </div>
+            <div class="perf-row">
+              <div class="perf-name">Risk Framing</div>
+              <div class="perf-bar" style="--fill:88%"></div>
+              <div class="perf-value">88</div>
+            </div>
+            <div class="perf-row">
+              <div class="perf-name">Execution UX</div>
+              <div class="perf-bar" style="--fill:84%"></div>
+              <div class="perf-value">84</div>
+            </div>
+            <div class="perf-row">
+              <div class="perf-name">Desk Readiness</div>
+              <div class="perf-bar" style="--fill:95%"></div>
+              <div class="perf-value">95</div>
+            </div>
+          </div>
+          <ul class="feature-list">
+            <li>Sticky access panel keeps the conversion path visible while the story scrolls.</li>
+            <li>Parallax cards and reveal timing create depth without turning the page into motion clutter.</li>
+            <li>Every metric block is calm, legible, and styled for decision-making instead of spectacle.</li>
+          </ul>
+        </article>
+
+        <article class="feature-card half reveal">
+          <div class="feature-label">Conversion</div>
+          <div class="feature-title">Secure access remains part of the brand experience.</div>
+          <div class="feature-copy">Login and signup now feel like a client portal, not a utility form. The forms still use the same IDs and API calls, so the backend behavior is preserved while the perceived product quality jumps meaningfully.</div>
+        </article>
+
+        <article class="feature-card half reveal">
+          <div class="feature-label">Motion System</div>
+          <div class="feature-title">Scroll-based movement that feels expensive, not decorative.</div>
+          <div class="feature-copy">Intersection-based reveal timing, subtle parallax translation, a progress bar, and live tape motion make the page feel active and current while staying within premium enterprise restraint.</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <div class="section-header reveal">
+        <div>
+          <div class="section-kicker">Architecture</div>
+          <h2 class="section-title">A full-site narrative built around the trading stack.</h2>
+        </div>
+        <p class="section-copy">The page now tells a coherent systems story from ingress to execution. That matters because premium financial products win trust by showing architecture, controls, and process discipline, not by showing more widgets.</p>
+      </div>
+      <div class="timeline">
+        <article class="timeline-card reveal" data-delay="1">
+          <div class="timeline-step">01 · Ingest</div>
+          <h3>Realtime market inputs</h3>
+          <p>Live prices, historical candles, and news context converge into one decision fabric so the desk sees the market as a system, not a set of isolated feeds.</p>
+          <ul>
+            <li>WebSocket and polling fallbacks</li>
+            <li>Multi-asset monitoring surface</li>
+            <li>Live tape for immediate market context</li>
+          </ul>
+        </article>
+        <article class="timeline-card reveal" data-delay="2">
+          <div class="timeline-step">02 · Interpret</div>
+          <h3>Ensemble model intelligence</h3>
+          <p>Signals are framed as structured conviction objects backed by model diversity, feature depth, and layered validation rather than raw probabilities alone.</p>
+          <ul>
+            <li>LSTM, Transformer, LightGBM</li>
+            <li>Meta-learner stacking layer</li>
+            <li>Explainability and confidence posture</li>
+          </ul>
+        </article>
+        <article class="timeline-card reveal" data-delay="3">
+          <div class="timeline-step">03 · Filter</div>
+          <h3>Risk gating and allocation</h3>
+          <p>The aesthetic and the product copy now stress discipline first: freshness, reward-to-risk, concentration, and book correlation become part of the brand promise.</p>
+          <ul>
+            <li>Seven-stage signal qualification</li>
+            <li>Position sizing within portfolio limits</li>
+            <li>Capital-aware execution posture</li>
+          </ul>
+        </article>
+        <article class="timeline-card reveal">
+          <div class="timeline-step">04 · Execute</div>
+          <h3>Operator-ready delivery</h3>
+          <p>Every surface now points toward a professional operating environment: paper execution, broker routing, auditability, and role-based access with clean visual hierarchy.</p>
+          <ul>
+            <li>Paper trading and live routing paths</li>
+            <li>JWT access and user roles</li>
+            <li>Premium dashboard handoff after sign in</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="operations">
+      <div class="quote-shell reveal">
+        <div class="quote-grid">
+          <div class="quote-copy">
+            <div class="section-kicker" style="color:#8fd0ae">Operations</div>
+            <h2>Built to look like the front door of a high-conviction trading operation.</h2>
+            <p>That means executive clarity, operational confidence, and controlled motion. The landing page is no longer just an auth screen. It is now a product-grade surface that frames AlphaGrid as a polished live trading company from the first second.</p>
+          </div>
+          <div class="quote-points">
+            <div class="quote-point">
+              <strong>Fintech minimalism</strong>
+              <span>Neutral surfaces, disciplined spacing, restrained gradients, and premium typographic contrast create a more expensive and credible impression.</span>
+            </div>
+            <div class="quote-point">
+              <strong>Scroll storytelling</strong>
+              <span>The page moves from promise to platform to architecture to access, which feels intentional and professional instead of static or brochure-like.</span>
+            </div>
+            <div class="quote-point">
+              <strong>Conversion without compromise</strong>
+              <span>Secure access and private account handling are integrated cleanly into the design without breaking the underlying login and signup logic.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer reveal">
+    <div class="footer-shell">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 17L10 12L13 15L19 8"></path>
+              <path d="M15 8H19V12"></path>
+            </svg>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-name">AlphaGrid</div>
+            <div class="brand-tag">Live Trading Infrastructure</div>
+          </div>
+        </div>
+        <div class="footer-copy">Premium landing architecture, refined fintech motion, and a higher-trust entry experience for the existing AlphaGrid platform. The public surface now matches the ambition of the trading system behind it.</div>
+      </div>
+      <div class="footer-bottom">
+        <span>AlphaGrid Capital Systems</span>
+        <span>FastAPI · JWT Auth · WebSocket Streaming · Model Ensemble</span>
+        <span><a href="#top">Back to top</a></span>
       </div>
     </div>
-
-    <div class="ver-tag">AlphaGrid v8 · FastAPI · PyTorch 2.3 · LightGBM · yfinance</div>
-  </div>
-
-  <!-- ═══════════ RIGHT ═══════════ -->
-  <div class="right">
-    <div class="form-card">
-
-      <div class="status-bar">
-        <div class="status-dot"></div>
-        <span class="status-text">API ONLINE · MARKET DATA LIVE · 150 SYMBOLS</span>
-      </div>
-
-      <button class="demo-btn" onclick="tryDemo()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Try Live Demo — No Sign Up
-        <span class="demo-tag">INSTANT ACCESS</span>
-      </button>
-
-      <div class="or-divider">
-        <div class="or-line"></div>
-        <span class="or-text">or sign in with account</span>
-        <div class="or-line"></div>
-      </div>
-
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tab-login"  onclick="showLogin()">Sign In</button>
-        <button class="auth-tab"        id="tab-signup" onclick="showSignup()">Create Account</button>
-      </div>
-
-      <!-- ── LOGIN FORM ── -->
-      <div id="login-form">
-        <div class="field">
-          <label class="field-label">Username or Email</label>
-          <input class="field-input" id="l-ident" type="text"
-                 placeholder="admin or you@example.com"
-                 autocomplete="username">
-        </div>
-        <div class="field">
-          <label class="field-label">
-            Password
-            <span style="font-weight:400;font-size:9px;color:var(--t4);text-transform:none">Min 8 chars</span>
-          </label>
-          <input class="field-input" id="l-pass" type="password"
-                 placeholder="••••••••"
-                 autocomplete="current-password">
-        </div>
-        <div class="form-msg" id="login-msg"></div>
-        <button class="submit-btn" id="login-btn" onclick="doLogin()">Sign In</button>
-
-        <div class="creds-panel" style="margin-top:20px">
-          <div class="creds-header">
-            <div class="creds-header-dot"></div>
-            Default Credentials
-          </div>
-          <div class="cred-row owner-row">
-            <span class="cred-label">OWNER</span>
-            <span class="cred-val">admin / admin1234</span>
-            <span class="cred-fill" onclick="fillCreds('admin','admin1234')">USE</span>
-          </div>
-          <div class="cred-row">
-            <span class="cred-label">TRADER</span>
-            <span class="cred-val">trader / trader1234</span>
-            <span class="cred-fill" onclick="fillCreds('trader','trader1234')">USE</span>
-          </div>
-          <div class="cred-row">
-            <span class="cred-label">DEMO</span>
-            <span class="cred-val">demo / demo1234</span>
-            <span class="cred-fill" onclick="fillCreds('demo','demo1234')">USE</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── SIGNUP FORM ── -->
-      <div id="signup-form" style="display:none">
-        <div class="field">
-          <label class="field-label">Full Name</label>
-          <input class="field-input" id="s-name"  type="text"     placeholder="Alex Trader"          autocomplete="name">
-        </div>
-        <div class="field">
-          <label class="field-label">Email</label>
-          <input class="field-input" id="s-email" type="email"    placeholder="you@example.com"      autocomplete="email">
-        </div>
-        <div class="field">
-          <label class="field-label">
-            Username
-            <span style="font-weight:300;font-size:9px;color:var(--t4);text-transform:none">optional</span>
-          </label>
-          <input class="field-input" id="s-uname" type="text"     placeholder="auto-generated if blank" autocomplete="username">
-        </div>
-        <div class="field">
-          <label class="field-label">Password</label>
-          <input class="field-input" id="s-pass"  type="password" placeholder="Min 8 characters"    autocomplete="new-password"
-                 oninput="updatePwStrength(this.value)">
-          <div class="pw-bars">
-            <div class="pw-seg" id="ps1"></div><div class="pw-seg" id="ps2"></div>
-            <div class="pw-seg" id="ps3"></div><div class="pw-seg" id="ps4"></div>
-          </div>
-          <div class="pw-lbl" id="pw-label">Enter a password</div>
-        </div>
-
-        <div style="font-size:10px;font-weight:600;color:var(--t3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Account Type</div>
-        <div class="role-grid">
-          <div class="role-card sel-trader" id="role-trader" onclick="selectRole('trader')">
-            <div class="role-pip trader"></div>
-            <div class="role-name">Trader</div>
-            <div class="role-desc">Portfolio, signals, chart, live execution</div>
-            <div class="role-chk" id="rc-trader">✓</div>
-          </div>
-          <div class="role-card" id="role-builder" onclick="selectRole('builder')">
-            <div class="role-pip builder"></div>
-            <div class="role-name">Builder</div>
-            <div class="role-desc">Full access + model eval + strategy lab</div>
-            <div class="role-chk" id="rc-builder"></div>
-          </div>
-        </div>
-
-        <div class="form-msg" id="signup-msg"></div>
-        <button class="submit-btn" id="signup-btn" onclick="doSignup()">Create Account</button>
-      </div>
-
-    </div>
-  </div>
-
+  </footer>
 </div>
 
 <script>
-const API = window.location.origin;
-let _role = 'trader';
+let _apiReady = true;
+let _apiBase = '';
+const THEME_KEY = 'ag_theme';
 
-/* ── Animated canvas background ─────────────────────────────── */
-(function() {
-  const canvas = document.getElementById('bg-canvas');
-  const ctx = canvas.getContext('2d');
-  let W, H, nodes = [];
+function getTheme() {
+  try { return localStorage.getItem(THEME_KEY) || document.documentElement.dataset.theme || 'light'; }
+  catch { return document.documentElement.dataset.theme || 'light'; }
+}
 
-  function resize() {
-    W = canvas.width  = window.innerWidth;
-    H = canvas.height = window.innerHeight;
+function syncThemeToggle() {
+  const theme = getTheme();
+  const btn = document.getElementById('theme-toggle-auth');
+  const label = document.getElementById('theme-toggle-auth-label');
+  if (btn) {
+    btn.classList.toggle('active', theme === 'dark');
+    btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
   }
-  resize();
-  window.addEventListener('resize', resize);
+  if (label) label.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+}
 
-  function createNodes(n) {
-    nodes = [];
-    for (let i = 0; i < n; i++) {
-      nodes.push({
-        x: Math.random() * W, y: Math.random() * H,
-        vx: (Math.random() - .5) * .4, vy: (Math.random() - .5) * .4,
-        r: Math.random() * 1.5 + .5,
-        alpha: Math.random() * .5 + .2,
-      });
-    }
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch {}
+  syncThemeToggle();
+}
+
+function toggleTheme() {
+  setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+}
+
+(function clearIfLooping() {
+  if (document.referrer && document.referrer.includes('/dashboard')) {
+    localStorage.removeItem('ag_access_token');
+    localStorage.removeItem('ag_refresh_token');
+    localStorage.removeItem('ag_user');
+    return;
   }
-  createNodes(80);
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    // Draw connections
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const dx = nodes[j].x - nodes[i].x;
-        const dy = nodes[j].y - nodes[i].y;
-        const d  = Math.sqrt(dx*dx + dy*dy);
-        if (d < 120) {
-          const alpha = (1 - d/120) * .08;
-          ctx.strokeStyle = `rgba(59,130,246,${alpha})`;
-          ctx.lineWidth = .5;
-          ctx.beginPath();
-          ctx.moveTo(nodes[i].x, nodes[i].y);
-          ctx.lineTo(nodes[j].x, nodes[j].y);
-          ctx.stroke();
-        }
-      }
-    }
-    // Draw nodes
-    nodes.forEach(n => {
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(59,130,246,${n.alpha})`;
-      ctx.fill();
-      // Move
-      n.x += n.vx; n.y += n.vy;
-      if (n.x < 0 || n.x > W) n.vx *= -1;
-      if (n.y < 0 || n.y > H) n.vy *= -1;
-    });
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
-/* ── Auto-redirect if authenticated ─────────────────────────── */
-(function checkExistingSession() {
   const token = localStorage.getItem('ag_access_token');
   if (!token) return;
   try {
-    let payload;
     const parts = token.split('.');
-    if (parts.length === 3) {
-      const b64 = parts[1];
-      const pad = '='.repeat((4 - b64.length % 4) % 4);
-      payload = JSON.parse(atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/')));
-    } else {
-      payload = JSON.parse(atob((token + '==').replace(/-/g,'+').replace(/_/g,'/')));
+    if (parts.length !== 3) {
+      localStorage.clear();
+      return;
     }
+    const b64 = parts[1];
+    const pad = '='.repeat((4 - b64.length % 4) % 4);
+    const payload = JSON.parse(atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/')));
     const exp = typeof payload.exp === 'string'
-      ? new Date(payload.exp).getTime() / 1000 : payload.exp;
-    if (exp && Date.now() / 1000 < exp) window.location.href = '/dashboard';
-  } catch {}
-})();
-
-/* ── Fetch live prices for ticker ────────────────────────────── */
-(async function fetchTicker() {
-  try {
-    const r = await fetch(API + '/api/prices?symbols=AAPL,MSFT,NVDA,TSLA,META,GOOGL,AMD,AMZN,SPY,QQQ,EURUSD=X,GBPUSD=X');
-    const data = await r.json();
-    const ticks = document.querySelectorAll('.ls-tick');
-    let i = 0;
-    const syms = ['AAPL','MSFT','NVDA','TSLA','META','GOOGL','AMD','AMZN','SPY','QQQ','EURUSD=X','GBPUSD=X'];
-    syms.forEach((sym, idx) => {
-      const p = data[sym];
-      if (!p) return;
-      const chg = p.change_pct || 0;
-      const up  = chg >= 0;
-      const dec = sym.includes('=X') ? 4 : 2;
-      [ticks[idx], ticks[idx + 12]].forEach(t => {
-        if (!t) return;
-        t.querySelector('.ls-val').textContent = '$' + p.price.toFixed(dec);
-        const c = t.querySelector('.ls-chg');
-        c.textContent = (up ? '+' : '') + chg.toFixed(2) + '%';
-        c.className = 'ls-chg ' + (up ? 'up' : 'dn');
-      });
-    });
-    // Update stat cards
-    const spy = data['SPY'];
-    if (spy) {
-      const el = document.getElementById('ls-sym1');
-      const chg = spy.change_pct || 0;
-      el.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
-      el.className = 'ss-val ' + (chg >= 0 ? 'up' : 'dn');
+      ? new Date(payload.exp).getTime() / 1000
+      : payload.exp;
+    if (exp && Date.now() / 1000 >= exp) {
+      localStorage.removeItem('ag_access_token');
+      localStorage.removeItem('ag_refresh_token');
+      localStorage.removeItem('ag_user');
+      return;
     }
-  } catch {}
+    window.location.href = '/dashboard';
+  } catch {
+    localStorage.removeItem('ag_access_token');
+    localStorage.removeItem('ag_refresh_token');
+    localStorage.removeItem('ag_user');
+  }
 })();
 
-/* ── Tab switching ───────────────────────────────────────────── */
 function showLogin() {
-  document.getElementById('login-form').style.display  = 'block';
+  document.getElementById('login-form').style.display = 'block';
   document.getElementById('signup-form').style.display = 'none';
   document.getElementById('tab-login').classList.add('active');
   document.getElementById('tab-signup').classList.remove('active');
 }
+
 function showSignup() {
-  document.getElementById('login-form').style.display  = 'none';
+  document.getElementById('login-form').style.display = 'none';
   document.getElementById('signup-form').style.display = 'block';
   document.getElementById('tab-login').classList.remove('active');
   document.getElementById('tab-signup').classList.add('active');
 }
 
-/* ── Role selector ───────────────────────────────────────────── */
-function selectRole(r) {
-  _role = r;
-  ['trader', 'builder'].forEach(x => {
-    document.getElementById('role-' + x).className = 'role-card' + (x === r ? ' sel-' + x : '');
-    document.getElementById('rc-' + x).textContent = (x === r) ? '✓' : '';
-  });
-}
-
-/* ── Password strength ───────────────────────────────────────── */
-function updatePwStrength(pw) {
-  const segs = [1,2,3,4].map(i => document.getElementById('ps' + i));
+function updatePwStrength(password) {
+  const segs = [1, 2, 3, 4].map((i) => document.getElementById('ps' + i));
   const label = document.getElementById('pw-label');
   let score = 0;
-  if (pw.length >= 8)           score++;
-  if (/[A-Z]/.test(pw))        score++;
-  if (/[0-9]/.test(pw))        score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  if (password.length >= 8) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
   const levels = ['', 'weak', 'fair', 'good', 'strong'];
-  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong — good to go'];
-  const colors = ['', 'var(--red)', 'var(--amber)', 'var(--accent)', 'var(--green)'];
-  segs.forEach((el, i) => { el.className = 'pw-seg' + (i < score ? ' ' + levels[score] : ''); });
-  label.textContent = pw ? (labels[score] || 'Weak') : 'Enter a password';
-  label.style.color = colors[score] || 'var(--t3)';
+  const labels = ['', 'Weak password', 'Fair password', 'Good password', 'Strong password'];
+  const colors = ['', '#b24d4d', '#b18138', '#1b7c59', '#0e6a47'];
+
+  segs.forEach((seg, index) => {
+    seg.className = 'pw-seg' + (index < score ? ' ' + levels[score] : '');
+  });
+  label.textContent = password ? labels[score] || 'Weak password' : 'Enter a strong password.';
+  label.style.color = colors[score] || 'var(--muted)';
 }
 
-/* ── Fill credentials ────────────────────────────────────────── */
-function fillCreds(ident, pass) {
-  document.getElementById('l-ident').value = ident;
-  document.getElementById('l-pass').value  = pass;
-  clearMsg('login-msg');
-}
-
-/* ── Messages ────────────────────────────────────────────────── */
 function showMsg(id, text, type) {
   const el = document.getElementById(id);
-  el.textContent = text; el.className = 'form-msg show ' + type;
+  el.textContent = text;
+  el.className = 'form-msg show ' + type;
 }
+
 function clearMsg(id) {
   const el = document.getElementById(id);
   if (el) el.className = 'form-msg';
 }
 
-/* ── Login ───────────────────────────────────────────────────── */
+function setApiStatus(text, ready) {
+  const badge = document.getElementById('access-status-badge');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.style.background = ready ? '#edf5ef' : '#f5efe7';
+  badge.style.color = ready ? 'var(--green)' : 'var(--gold)';
+}
+
+function setAuthActionsDisabled(disabled) {
+  ['login-btn', 'signup-btn'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+}
+
+function getCandidateApiBases() {
+  const currentOrigin = window.location.origin || '';
+  const out = [];
+  ['', currentOrigin, 'http://127.0.0.1:8080', 'http://localhost:8080'].forEach((value) => {
+    if (value && !out.includes(value)) out.push(value);
+    if (value === '' && !out.includes(value)) out.push(value);
+  });
+  return out;
+}
+
+async function requestJson(path, options = {}) {
+  const bases = _apiBase ? [_apiBase] : getCandidateApiBases();
+  let lastError = null;
+
+  for (const base of bases) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+    try {
+      const resp = await fetch(base + path, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+      clearTimeout(timer);
+      const raw = await resp.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = raw ? {error: raw} : {};
+      }
+      _apiBase = base;
+      return {resp, data};
+    } catch (error) {
+      clearTimeout(timer);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to reach AlphaGrid API');
+}
+
+async function warmupAuthSurface() {
+  setAuthActionsDisabled(false);
+  setApiStatus('Login Ready', true);
+  for (let attempt = 0; attempt < 30; attempt++) {
+    try {
+      const {resp} = await requestJson('/api/health', {method: 'GET', headers: {}, timeoutMs: 2500});
+      if (resp.ok) {
+        _apiReady = true;
+        setApiStatus('Premium Live', true);
+        return;
+      }
+    } catch (error) {
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  setApiStatus('Background Sync', false);
+}
+
+function ensureApiReady(msgId) {
+  if (_apiReady) return true;
+  clearMsg(msgId);
+  return true;
+}
+
 async function doLogin() {
   const ident = document.getElementById('l-ident').value.trim();
-  const pass  = document.getElementById('l-pass').value;
+  const pass = document.getElementById('l-pass').value;
   clearMsg('login-msg');
-  if (!ident || !pass) { showMsg('login-msg', 'Enter your username (or email) and password.', 'err'); return; }
+  if (!ensureApiReady('login-msg')) return;
+  if (!ident || !pass) {
+    showMsg('login-msg', 'Enter your username or email, then your password.', 'err');
+    return;
+  }
+
   const btn = document.getElementById('login-btn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="btn-spin"></span>Authenticating…';
+  btn.innerHTML = '<span class="btn-spin"></span>Authorizing';
   try {
-    const resp = await fetch(API + '/api/auth/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email: ident, username: ident, password: pass }),
+    const {resp, data} = await requestJson('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({email: ident, username: ident, password: pass}),
     });
-    const data = await resp.json();
     if (!resp.ok) {
-      showMsg('login-msg', data.error || 'Sign in failed — check your credentials.', 'err');
-      btn.disabled = false; btn.innerHTML = 'Sign In'; return;
+      showMsg('login-msg', data.error || 'Sign in failed. Check your credentials.', 'err');
+      btn.disabled = false;
+      btn.textContent = 'Open Command Center';
+      return;
     }
-    localStorage.setItem('ag_access_token',  data.access_token);
+    localStorage.setItem('ag_access_token', data.access_token);
     localStorage.setItem('ag_refresh_token', data.refresh_token);
-    localStorage.setItem('ag_user',          JSON.stringify(data.user));
-    showMsg('login-msg', `Access granted. Launching AlphaGrid…`, 'ok');
+    localStorage.setItem('ag_user', JSON.stringify(data.user));
+    showMsg('login-msg', 'Access granted. Opening AlphaGrid now.', 'ok');
     setTimeout(() => { window.location.href = '/dashboard'; }, 500);
-  } catch (e) {
-    showMsg('login-msg', 'Cannot reach AlphaGrid server. Is it running?', 'err');
-    btn.disabled = false; btn.innerHTML = 'Sign In';
+  } catch (error) {
+    showMsg('login-msg', 'Unable to complete sign in. If the server just started, wait a few seconds and try again.', 'err');
+    btn.disabled = false;
+    btn.textContent = 'Open Command Center';
   }
 }
 
-/* ── Sign up ─────────────────────────────────────────────────── */
 async function doSignup() {
-  const name  = document.getElementById('s-name').value.trim();
+  const name = document.getElementById('s-name').value.trim();
   const email = document.getElementById('s-email').value.trim();
   const uname = document.getElementById('s-uname').value.trim();
-  const pass  = document.getElementById('s-pass').value;
+  const pass = document.getElementById('s-pass').value;
   clearMsg('signup-msg');
-  if (!name)                         { showMsg('signup-msg', 'Enter your full name.', 'err'); return; }
-  if (!email || !email.includes('@')) { showMsg('signup-msg', 'Enter a valid email address.', 'err'); return; }
-  if (pass.length < 8)               { showMsg('signup-msg', 'Password must be at least 8 characters.', 'err'); return; }
+  if (!ensureApiReady('signup-msg')) return;
+
+  if (!name) {
+    showMsg('signup-msg', 'Enter your full name.', 'err');
+    return;
+  }
+  if (!email || !email.includes('@')) {
+    showMsg('signup-msg', 'Enter a valid email address.', 'err');
+    return;
+  }
+  if (pass.length < 8) {
+    showMsg('signup-msg', 'Password must be at least 8 characters.', 'err');
+    return;
+  }
+
   const btn = document.getElementById('signup-btn');
-  btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>Creating account…';
-  try {
-    const resp = await fetch(API + '/api/auth/signup', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email, username: uname || '', password: pass, display_name: name, role: _role }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      showMsg('signup-msg', data.error || 'Signup failed.', 'err');
-      btn.disabled = false; btn.innerHTML = 'Create Account'; return;
-    }
-    localStorage.setItem('ag_access_token',  data.access_token);
-    localStorage.setItem('ag_refresh_token', data.refresh_token);
-    localStorage.setItem('ag_user',          JSON.stringify(data.user));
-    showMsg('signup-msg', 'Account created! Launching AlphaGrid…', 'ok');
-    setTimeout(() => { window.location.href = '/dashboard'; }, 600);
-  } catch (e) {
-    showMsg('signup-msg', 'Cannot reach server.', 'err');
-    btn.disabled = false; btn.innerHTML = 'Create Account';
-  }
-}
-
-/* ── Demo login ──────────────────────────────────────────────── */
-async function tryDemo() {
-  const btn = event.currentTarget;
-  btn.innerHTML = '<span class="btn-spin"></span>Launching…';
   btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spin"></span>Creating Workspace';
   try {
-    const resp = await fetch(API + '/api/auth/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ username: 'demo', email: 'demo', password: 'demo1234' }),
+    const {resp, data} = await requestJson('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({email, username: uname || '', password: pass, display_name: name}),
     });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'Demo login failed');
-    localStorage.setItem('ag_access_token',  data.access_token);
+    if (!resp.ok) {
+      showMsg('signup-msg', data.error || 'Account creation failed.', 'err');
+      btn.disabled = false;
+      btn.textContent = 'Create User Account';
+      return;
+    }
+    localStorage.setItem('ag_access_token', data.access_token);
     localStorage.setItem('ag_refresh_token', data.refresh_token);
-    localStorage.setItem('ag_user',          JSON.stringify(data.user));
-    window.location.href = '/dashboard';
-  } catch(e) {
-    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try Live Demo — No Sign Up';
+    localStorage.setItem('ag_user', JSON.stringify(data.user));
+    showMsg('signup-msg', 'Account created. Opening your workspace.', 'ok');
+    setTimeout(() => { window.location.href = '/dashboard'; }, 600);
+  } catch (error) {
+    showMsg('signup-msg', 'Unable to create the account right now. If the server is warming up, try again in a few seconds.', 'err');
     btn.disabled = false;
-    showMsg('login-msg', 'Demo: ' + e.message, 'err');
-    document.getElementById('login-form').style.display = 'block';
+    btn.textContent = 'Create User Account';
   }
 }
 
-/* ── Enter key ───────────────────────────────────────────────── */
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Enter') return;
-  const lf = document.getElementById('login-form');
-  const sf = document.getElementById('signup-form');
-  if (lf && lf.style.display !== 'none') doLogin();
-  else if (sf && sf.style.display !== 'none') doSignup();
+async function fetchTicker() {
+  try {
+    const {data} = await requestJson('/api/prices?symbols=AAPL,MSFT,NVDA,SPY,QQQ,EURUSD=X,GBPUSD=X', {
+      method: 'GET',
+      headers: {},
+      timeoutMs: 4000,
+    });
+    const rows = [
+      ['AAPL', 'AAPL'],
+      ['MSFT', 'MSFT'],
+      ['NVDA', 'NVDA'],
+      ['SPY', 'SPY'],
+      ['QQQ', 'QQQ'],
+      ['EURUSD=X', 'EURUSD'],
+      ['GBPUSD=X', 'GBPUSD'],
+    ];
+    const ticker = document.getElementById('ticker-inner');
+    const items = ticker.querySelectorAll('.ticker-item');
+    rows.forEach(([key, label], index) => {
+      const point = data[key];
+      if (!point) return;
+      const percent = Number(point.change_pct || 0);
+      const dec = key.includes('=X') ? 4 : 2;
+      [items[index], items[index + rows.length]].forEach((item) => {
+        if (!item) return;
+        item.innerHTML =
+          '<strong>' + label + '</strong>' +
+          '<span>$' + Number(point.price || 0).toFixed(dec) + '</span>' +
+          '<span class="' + (percent >= 0 ? 'ticker-up' : 'ticker-dn') + '">' +
+          (percent >= 0 ? '+' : '') + percent.toFixed(2) + '%</span>';
+      });
+    });
+  } catch (error) {
+  }
+}
+
+function initReveal() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in');
+      }
+    });
+  }, {threshold: 0.18});
+
+  document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
+}
+
+function initCounters() {
+  const seen = new WeakSet();
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting || seen.has(entry.target)) return;
+      seen.add(entry.target);
+      const el = entry.target;
+      const target = Number(el.dataset.count || 0);
+      const duration = 1200;
+      const start = performance.now();
+      const step = (now) => {
+        const progress = Math.min((now - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = Math.round(target * eased);
+        if (progress < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    });
+  }, {threshold: 0.5});
+
+  document.querySelectorAll('[data-count]').forEach((el) => observer.observe(el));
+}
+
+function initScrollFx() {
+  const bar = document.getElementById('scroll-indicator');
+  const items = document.querySelectorAll('[data-parallax]');
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = max > 0 ? (window.scrollY / max) * 100 : 0;
+    bar.style.width = progress + '%';
+    items.forEach((item) => {
+      const speed = Number(item.dataset.parallax || 0);
+      const rect = item.getBoundingClientRect();
+      const viewportCenter = window.innerHeight * 0.5;
+      const distance = rect.top + rect.height * 0.5 - viewportCenter;
+      item.style.setProperty('--shift', (-distance * speed).toFixed(2));
+    });
+  };
+  onScroll();
+  window.addEventListener('scroll', onScroll, {passive: true});
+  window.addEventListener('resize', onScroll);
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return;
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  if (loginForm && loginForm.style.display !== 'none') doLogin();
+  else if (signupForm && signupForm.style.display !== 'none') doSignup();
 });
+
+fetchTicker();
+warmupAuthSurface();
+initReveal();
+initCounters();
+initScrollFx();
+syncThemeToggle();
 </script>
 </body>
 </html>

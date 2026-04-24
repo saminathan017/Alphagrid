@@ -1,5 +1,5 @@
 """
-dashboard/app.py  —  AlphaGrid v7 Production API
+dashboard/app.py  —  AlphaGrid v8 Production API
 =================================================
 Real FastAPI server. No mock data. Every endpoint pulls live data from:
   • Alpaca WS  — real-time IEX prices for top 30 US equities (10–50ms)
@@ -21,27 +21,58 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
+import ssl
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote, urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
 import numpy as np
 import pandas as pd
+try:
+    from sklearn.metrics import roc_curve as _sklearn_roc_curve
+except Exception:
+    _sklearn_roc_curve = None
 
 # ── path setup so imports resolve when run from project root ──────────────────
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
+_TRAINING_PROGRESS_FILE = ROOT / "logs" / "premium_model_report_150_10y_resume.json"
+_INSTITUTIONAL_FLOW_TTL_SECONDS = 1800
+_institutional_flow_cache: dict[str, dict] = {}
+_SEC_TICKER_MAP_TTL_SECONDS = 6 * 3600
+_SEC_INSIDER_TTL_SECONDS = 1800
+_sec_ticker_map_cache: dict[str, int] = {}
+_sec_ticker_map_ts = 0.0
+_insider_activity_cache: dict[str, dict] = {}
+
+_SMART_MONEY_ENTITIES = [
+    {"name": "Berkshire Hathaway", "aliases": ["berkshire hathaway", "warren buffett", "buffett"]},
+    {"name": "ARK Invest", "aliases": ["ark invest", "ark investment", "cathie wood", "ark innovation"]},
+    {"name": "BlackRock", "aliases": ["blackrock", "ishares"]},
+    {"name": "Vanguard", "aliases": ["vanguard"]},
+    {"name": "Bridgewater", "aliases": ["bridgewater", "ray dalio"]},
+    {"name": "Renaissance Technologies", "aliases": ["renaissance technologies", "renaissance"]},
+    {"name": "Pershing Square", "aliases": ["pershing square", "bill ackman", "ackman"]},
+    {"name": "Tiger Global", "aliases": ["tiger global"]},
+    {"name": "Coatue", "aliases": ["coatue"]},
+    {"name": "Soros Fund Management", "aliases": ["soros fund", "george soros", "soros fund management"]},
+    {"name": "Appaloosa", "aliases": ["appaloosa", "david tepper", "tepper"]},
+    {"name": "Third Point", "aliases": ["third point", "dan loeb", "loeb"]},
+]
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Header, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from loguru import logger
 
 # ── project imports ───────────────────────────────────────────────────────────
@@ -94,9 +125,9 @@ except Exception as e:
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="AlphaGrid API",
-    version="5.0.0",
-    description="Real-time trading intelligence — no mock data",
+    title="AlphaGrid Capital API",
+    version="8.0.0",
+    description="Premium live trading platform with realtime market intelligence",
 )
 
 _cors_origins = [o.strip() for o in os.getenv("ALPHAGRID_CORS_ORIGINS", "*").split(",")]
@@ -116,33 +147,55 @@ if _STATIC_DIR.exists():
 
 # ── Page routing — serve HTML files ──────────────────────────────────────────
 
+_HTML_NO_CACHE = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
+def _html_file(path: Path) -> FileResponse:
+    return FileResponse(str(path), media_type="text/html", headers=_HTML_NO_CACHE)
+
 @app.get("/")
 async def root():
     """Redirect root to login page."""
     return HTMLResponse(
         '<meta http-equiv="refresh" content="0; url=/login">',
-        status_code=200
+        status_code=200,
+        headers=_HTML_NO_CACHE,
+    )
+
+@app.get("/clear")
+async def clear_session_page():
+    clear_file = _DASH_DIR / "clear.html"
+    if clear_file.exists():
+        return _html_file(clear_file)
+    return HTMLResponse(
+        '<script>localStorage.clear();window.location.replace("/login");</script>',
+        status_code=200,
+        headers=_HTML_NO_CACHE,
     )
 
 @app.get("/login")
 async def login_page():
     auth_file = _DASH_DIR / "auth.html"
     if auth_file.exists():
-        return FileResponse(str(auth_file), media_type="text/html")
+        return _html_file(auth_file)
     return HTMLResponse("<h1>auth.html not found</h1>", status_code=404)
 
 @app.get("/signup")
 async def signup_page():
     auth_file = _DASH_DIR / "auth.html"
     if auth_file.exists():
-        return FileResponse(str(auth_file), media_type="text/html")
+        return _html_file(auth_file)
     return HTMLResponse("<h1>auth.html not found</h1>", status_code=404)
 
 @app.get("/dashboard")
 async def dashboard_page():
     dash_file = _DASH_DIR / "index.html"
     if dash_file.exists():
-        return FileResponse(str(dash_file), media_type="text/html")
+        return _html_file(dash_file)
     return HTMLResponse("<h1>index.html not found</h1>", status_code=404)
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -282,59 +335,409 @@ strategy_engine = StrategyEngine() if STRATEGY_OK else None
 BATCH = 10   # symbols per yf.download call (conservative for reliability)
 
 _CACHE_DIR = ROOT / "cache" / "data"
+_PROVIDER_SYMBOL_ALIASES = {
+    # Yahoo does not reliably serve spot metals with =X, so we fall back to
+    # liquid free-market proxies that still give a robust directional picture.
+    "XAUUSD=X": ["GC=F", "GLD"],
+    "XAGUSD=X": ["SI=F", "SLV"],
+    "XPTUSD=X": ["PL=F", "PPLT"],
+    "XPDUSD=X": ["PA=F", "PALL"],
+}
+_ETF_SYMBOLS = {"SPY","QQQ","IWM","GLD","TLT","XLK","XLF","SOXS","SOXL","TQQQ"}
+_PROVIDER_RETRY_AFTER: dict[str, float] = {}
+_PROVIDER_BACKOFF_SECS = 30 * 60
+_YAHOO_HOSTS = (
+    "query1.finance.yahoo.com",
+    "query2.finance.yahoo.com",
+)
+_QUOTE_BATCH_SIZE = 40
+_CHART_INTERVAL_DEFAULT_RANGE = {
+    "5m": "5d",
+    "15m": "10d",
+    "30m": "20d",
+    "1h": "60d",
+    "4h": "180d",
+    "1d": "1y",
+    "1w": "5y",
+    "1mo": "10y",
+}
+
+
+def _http_json(url: str, timeout: float = 5.0) -> dict:
+    req = UrlRequest(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 AlphaGrid/8.0",
+            "Accept": "application/json,text/plain,*/*",
+        },
+    )
+    with urlopen(req, timeout=timeout) as resp:
+        raw = resp.read().decode("utf-8")
+    return json.loads(raw)
+
+
+def _http_text(url: str, timeout: float = 5.0, insecure: bool = False) -> str:
+    req = UrlRequest(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 AlphaGrid/8.0",
+            "Accept": "text/plain,text/csv,*/*",
+        },
+    )
+    context = ssl._create_unverified_context() if insecure else None
+    with urlopen(req, timeout=timeout, context=context) as resp:
+        return resp.read().decode("utf-8")
+
+
+def _provider_symbol_variants(symbol: str) -> list[str]:
+    """Return network/provider aliases for a symbol, preserving preference order."""
+    sym = symbol.upper().strip()
+    variants: list[str] = []
+
+    def add(name: str) -> None:
+        if name and name not in variants:
+            variants.append(name)
+
+    add(sym)
+    for alias in _PROVIDER_SYMBOL_ALIASES.get(sym, []):
+        add(alias)
+    return variants
+
+
+def _quote_payload_from_yahoo(requested_symbol: str, source_symbol: str, item: dict) -> Optional[dict]:
+    """Normalize Yahoo quote JSON into the dashboard price payload."""
+    market_state = str(item.get("marketState") or "").upper()
+    regular = item.get("regularMarketPrice")
+    post = item.get("postMarketPrice")
+    pre = item.get("preMarketPrice")
+    price = post if market_state.startswith("POST") and post not in (None, 0) else regular
+    if price in (None, 0) and pre not in (None, 0):
+        price = pre
+    if price in (None, 0):
+        return None
+
+    prev_close = item.get("regularMarketPreviousClose")
+    if prev_close in (None, 0):
+        prev_close = item.get("regularMarketPrice") or price
+    change = item.get("regularMarketChange")
+    if change is None and prev_close not in (None, 0):
+        change = float(price) - float(prev_close)
+    change_pct = item.get("regularMarketChangePercent")
+    if change_pct is None and prev_close not in (None, 0):
+        change_pct = ((float(price) - float(prev_close)) / float(prev_close) * 100)
+
+    ts = (
+        item.get("postMarketTime")
+        or item.get("regularMarketTime")
+        or item.get("preMarketTime")
+    )
+    if ts:
+        timestamp = datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
+    else:
+        timestamp = datetime.utcnow().isoformat()
+
+    payload = {
+        "symbol": requested_symbol,
+        "price": round(float(price), 4),
+        "prev_close": round(float(prev_close), 4) if prev_close not in (None, 0) else round(float(price), 4),
+        "change": round(float(change or 0.0), 4),
+        "change_pct": round(float(change_pct or 0.0), 3),
+        "volume": int(float(item.get("regularMarketVolume") or 0)),
+        "high": round(float(item.get("regularMarketDayHigh") or price), 4),
+        "low": round(float(item.get("regularMarketDayLow") or price), 4),
+        "open": round(float(item.get("regularMarketOpen") or prev_close or price), 4),
+        "timestamp": timestamp,
+        "source": "yahoo-quote" if source_symbol == requested_symbol else f"yahoo-proxy:{source_symbol}",
+        "market_state": market_state or "UNKNOWN",
+    }
+    return payload
+
+
+def _stooq_symbol(symbol: str) -> Optional[str]:
+    sym = symbol.upper().strip()
+    if "=" in sym or "/" in sym:
+        return None
+    return f"{sym.lower()}.us"
+
+
+def _fetch_stooq_quote(symbol: str) -> Optional[dict]:
+    """
+    Free delayed quote fallback for US equities/ETFs when Yahoo quote endpoints fail.
+    Stooq is not ideal for every asset class, but it is robust enough to avoid stale
+    month-old cached closes on the core equity dashboard.
+    """
+    stooq_symbol = _stooq_symbol(symbol)
+    if not stooq_symbol:
+        return None
+    try:
+        csv_text = _http_text(
+            f"https://stooq.com/q/l/?s={quote(stooq_symbol, safe='')}&f=sd2t2ohlcvn&e=csv",
+            timeout=6.0,
+            insecure=True,
+        ).strip()
+        if not csv_text or csv_text.startswith("N/D"):
+            return None
+        parts = [p.strip() for p in csv_text.split(",")]
+        if len(parts) < 8:
+            return None
+        raw_symbol, date_str, time_str, open_p, high_p, low_p, close_p, volume = parts[:8]
+        if close_p in {"N/D", ""}:
+            return None
+        price = float(close_p)
+        prev_close = state.prices.get(symbol, {}).get("prev_close") or price
+        change = price - float(prev_close)
+        change_pct = (change / float(prev_close) * 100) if prev_close else 0.0
+        timestamp = f"{date_str}T{time_str}+00:00" if date_str != "N/D" and time_str != "N/D" else datetime.utcnow().isoformat()
+        return {
+            "symbol": symbol,
+            "price": round(price, 4),
+            "prev_close": round(float(prev_close), 4),
+            "change": round(float(change), 4),
+            "change_pct": round(float(change_pct), 3),
+            "volume": int(float(volume)) if volume not in {"N/D", ""} else 0,
+            "high": round(float(high_p), 4) if high_p not in {"N/D", ""} else round(price, 4),
+            "low": round(float(low_p), 4) if low_p not in {"N/D", ""} else round(price, 4),
+            "open": round(float(open_p), 4) if open_p not in {"N/D", ""} else round(float(prev_close), 4),
+            "timestamp": timestamp,
+            "source": "stooq",
+        }
+    except Exception as e:
+        logger.debug(f"Stooq quote fail {symbol}: {e}")
+        return None
+
+
+def _fetch_live_quote_batch(symbols: list[str]) -> dict[str, dict]:
+    """Fetch latest market snapshots from Yahoo's public quote endpoint."""
+    pending = {sym: _provider_symbol_variants(sym) for sym in symbols}
+    resolved: dict[str, dict] = {}
+    max_depth = max((len(v) for v in pending.values()), default=0)
+
+    for depth in range(max_depth):
+        provider_map: dict[str, str] = {}
+        for requested_symbol, variants in pending.items():
+            if requested_symbol in resolved or depth >= len(variants):
+                continue
+            provider_symbol = variants[depth]
+            provider_map.setdefault(provider_symbol, requested_symbol)
+
+        if not provider_map:
+            continue
+
+        provider_symbols = list(provider_map.keys())
+        for idx in range(0, len(provider_symbols), _QUOTE_BATCH_SIZE):
+            chunk = provider_symbols[idx:idx + _QUOTE_BATCH_SIZE]
+            query = urlencode({"symbols": ",".join(chunk)})
+            for host in _YAHOO_HOSTS:
+                try:
+                    payload = _http_json(f"https://{host}/v7/finance/quote?{query}")
+                    results = payload.get("quoteResponse", {}).get("result", [])
+                    if not results:
+                        continue
+                    for item in results:
+                        provider_symbol = str(item.get("symbol") or "").upper()
+                        requested_symbol = provider_map.get(provider_symbol)
+                        if not requested_symbol:
+                            continue
+                        normalized = _quote_payload_from_yahoo(requested_symbol, provider_symbol, item)
+                        if normalized:
+                            resolved[requested_symbol] = normalized
+                    break
+                except Exception:
+                    continue
+
+    unresolved = [sym for sym in symbols if sym not in resolved]
+    for sym in unresolved:
+        stooq_quote = _fetch_stooq_quote(sym)
+        if stooq_quote:
+            resolved[sym] = stooq_quote
+
+    return resolved
+
+
+def _normalize_market_df(df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Normalize raw OHLCV data into the lowercase schema used throughout the app."""
+    if df is None or df.empty:
+        return pd.DataFrame()
+    try:
+        out = df.copy()
+        if isinstance(out.columns, pd.MultiIndex):
+            out.columns = [str(c[0]).lower() for c in out.columns]
+        else:
+            out.columns = [str(c).lower() for c in out.columns]
+        rename_map = {}
+        if "adj close" in out.columns and "close" not in out.columns:
+            rename_map["adj close"] = "close"
+        if rename_map:
+            out = out.rename(columns=rename_map)
+        needed = ["open", "high", "low", "close", "volume"]
+        if not all(col in out.columns for col in needed):
+            return pd.DataFrame()
+        out = out[needed].dropna()
+        if out.empty:
+            return pd.DataFrame()
+        out.index = pd.to_datetime(out.index, utc=True, errors="coerce")
+        out = out[~out.index.isna()]
+        return out
+    except Exception:
+        return pd.DataFrame()
+
+def _cache_name_variants(symbol: str) -> list[str]:
+    """Return likely on-disk cache keys for a market symbol."""
+    sym = symbol.upper().strip()
+    variants: list[str] = []
+
+    def add(name: str) -> None:
+        if name and name not in variants:
+            variants.append(name)
+
+    for name in _provider_symbol_variants(sym):
+        add(name)
+        add(name.replace("/", ""))
+
+        if name.endswith("=X"):
+            base = name[:-2]
+            add(base)
+            add(base + "_X")
+
+        if "/" in name:
+            compact = name.replace("/", "")
+            add(compact)
+            add(compact + "_X")
+
+        if name.endswith("_X"):
+            base = name[:-2]
+            add(base)
+            add(base + "=X")
+
+    return variants
 
 def _load_parquet(symbol: str) -> pd.DataFrame:
     """Load OHLCV from local parquet cache. Returns empty DataFrame if not found."""
-    sym = symbol.upper()
-    for name in [sym, sym.replace("/", "") + "_X", sym + "=X"]:
+    for name in _cache_name_variants(symbol):
         p = _CACHE_DIR / f"{name}.parquet"
         if p.exists():
             try:
                 df = pd.read_parquet(p)
-                # Flatten MultiIndex columns: ('Close', 'AAPL') → 'close'
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [c[0].lower() for c in df.columns]
-                else:
-                    df.columns = [c.lower() for c in df.columns]
-                needed = ["open", "high", "low", "close", "volume"]
-                if all(c in df.columns for c in needed):
-                    df = df[needed].dropna()
-                    df.index = pd.to_datetime(df.index, utc=True)
+                df = _normalize_market_df(df)
+                if not df.empty:
                     return df
             except Exception as e:
                 logger.debug(f"Parquet load fail {sym}: {e}")
     return pd.DataFrame()
 
 
+def _fetch_provider_history(
+    symbol: str,
+    period: str = "1y",
+    interval: str = "1d",
+) -> pd.DataFrame:
+    """Fetch OHLCV from free provider aliases, returning the first usable series."""
+    sym = symbol.upper().strip()
+    if not YF_OK or time.time() < _PROVIDER_RETRY_AFTER.get(sym, 0.0):
+        return pd.DataFrame()
+    for provider_symbol in _provider_symbol_variants(symbol):
+        try:
+            raw = yf.download(
+                provider_symbol,
+                period=period,
+                interval=interval,
+                auto_adjust=True,
+                progress=False,
+                threads=False,
+            )
+            df = _normalize_market_df(raw)
+            if not df.empty:
+                _PROVIDER_RETRY_AFTER.pop(sym, None)
+                return df
+        except Exception as e:
+            logger.debug(f"Provider history fail {symbol} via {provider_symbol}: {e}")
+    _PROVIDER_RETRY_AFTER[sym] = time.time() + _PROVIDER_BACKOFF_SECS
+    return pd.DataFrame()
+
+
+def _resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = (
+        df.sort_index()
+        .resample(rule)
+        .agg({
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        })
+        .dropna(subset=["open", "high", "low", "close"])
+    )
+    return out
+
+
+def _fetch_yahoo_chart_history(symbol: str, interval: str, range_value: str) -> pd.DataFrame:
+    """Fetch chart candles directly from Yahoo's public chart API."""
+    for provider_symbol in _provider_symbol_variants(symbol):
+        encoded = quote(provider_symbol, safe="")
+        params = urlencode({
+            "range": range_value,
+            "interval": interval,
+            "includePrePost": "true",
+            "events": "div,splits",
+        })
+        for host in _YAHOO_HOSTS:
+            try:
+                payload = _http_json(f"https://{host}/v8/finance/chart/{encoded}?{params}", timeout=6.0)
+                result = (payload.get("chart") or {}).get("result") or []
+                if not result:
+                    continue
+                block = result[0]
+                timestamps = block.get("timestamp") or []
+                quote_block = ((block.get("indicators") or {}).get("quote") or [{}])[0]
+                if not timestamps:
+                    continue
+                frame = pd.DataFrame({
+                    "open": quote_block.get("open", []),
+                    "high": quote_block.get("high", []),
+                    "low": quote_block.get("low", []),
+                    "close": quote_block.get("close", []),
+                    "volume": quote_block.get("volume", []),
+                })
+                if frame.empty:
+                    continue
+                frame.index = pd.to_datetime(timestamps[:len(frame)], unit="s", utc=True)
+                frame = _normalize_market_df(frame)
+                if not frame.empty:
+                    return frame
+            except Exception:
+                continue
+    return pd.DataFrame()
+
+
 def _yf_batch_prices(symbols: list[str]) -> dict[str, dict]:
     """
-    Read latest close + day change from local parquet cache (no yfinance calls).
+    Build latest snapshots from live quote endpoints first, then fall back to
+    in-memory/cache/history. This keeps prices current during market hours while
+    still rendering a complete dashboard if network sources fail.
     """
-    result = {}
-    ts = datetime.utcnow().isoformat()
+    result = _fetch_live_quote_batch(symbols)
     for sym in symbols:
         try:
-            df = _load_parquet(sym)
+            if sym in result and result[sym].get("price"):
+                continue
+
+            df = _get_cached_candles(sym, bars=3)
+            source = "cache"
             if df.empty or len(df) < 2:
+                df = _fetch_provider_history(sym, period="5d", interval="1d")
+                source = "yfinance"
+                if not df.empty:
+                    state.candles[sym] = df.tail(300)
+            payload = _price_payload_from_df(sym, df, source=source)
+            if not payload:
+                existing = state.prices.get(sym)
+                if existing and existing.get("price"):
+                    result[sym] = existing
                 continue
-            price      = float(df["close"].iloc[-1])
-            prev_close = float(df["close"].iloc[-2])
-            if price <= 0:
-                continue
-            chg     = price - prev_close
-            chg_pct = (chg / prev_close * 100) if prev_close else 0.0
-            result[sym] = {
-                "symbol":     sym,
-                "price":      round(price, 4),
-                "prev_close": round(prev_close, 4),
-                "change":     round(chg, 4),
-                "change_pct": round(chg_pct, 3),
-                "volume":     int(df["volume"].iloc[-1]),
-                "high":       round(float(df["high"].iloc[-1]), 4),
-                "low":        round(float(df["low"].iloc[-1]),  4),
-                "open":       round(float(df["open"].iloc[-1]), 4),
-                "timestamp":  ts,
-            }
+            result[sym] = payload
         except Exception as e:
             logger.debug(f"Price parse fail {sym}: {e}")
     return result
@@ -347,8 +750,10 @@ def _yf_history(
     start:    Optional[str] = None,
     end:      Optional[str] = None,
 ) -> pd.DataFrame:
-    """Load OHLCV history from local parquet cache — no yfinance calls."""
+    """Load OHLCV history from local cache first, then free provider fallbacks."""
     df = _load_parquet(symbol)
+    if df.empty:
+        df = _fetch_provider_history(symbol, period=period or "1y", interval=interval or "1d")
     if df.empty:
         return df
     if start:
@@ -364,6 +769,122 @@ def _yf_history(
         cutoff = pd.Timestamp.utcnow() - pd.Timedelta(days=days)
         df = df[df.index >= cutoff]
     return df
+
+def _normalize_ohlcv(df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    """Backward-compatible alias for normalized OHLCV schema."""
+    return _normalize_market_df(df)
+
+
+def _get_cached_candles(symbol: str, bars: int = 300) -> pd.DataFrame:
+    """Return cached daily candles from in-memory, parquet, or SQLite history."""
+    current = state.candles.get(symbol)
+    if current is not None and len(current) > 0:
+        return _normalize_ohlcv(current).tail(bars)
+
+    df = _normalize_ohlcv(_yf_history(symbol, period="1y", interval="1d"))
+    if df.empty and HIST_OK and history_manager:
+        try:
+            df = _normalize_ohlcv(history_manager.get_latest_n(symbol, "1d", bars))
+        except Exception:
+            df = pd.DataFrame()
+    if not df.empty:
+        state.candles[symbol] = df.tail(bars)
+        return state.candles[symbol]
+    return pd.DataFrame()
+
+
+def _has_local_history(symbol: str, bars: int = 30) -> bool:
+    """Cheap local-only availability check without touching the network."""
+    current = state.candles.get(symbol)
+    if current is not None and len(current) >= bars:
+        return True
+    if len(_load_parquet(symbol)) >= bars:
+        return True
+    if HIST_OK and history_manager:
+        try:
+            return len(history_manager.get_latest_n(symbol, "1d", bars)) >= bars
+        except Exception:
+            return False
+    return False
+
+
+def _price_payload_from_df(symbol: str, df: pd.DataFrame, source: str = "cache") -> Optional[dict]:
+    """Build a quote-like payload from cached candles."""
+    df = _normalize_ohlcv(df)
+    if df.empty:
+        return None
+    close = float(df["close"].iloc[-1])
+    prev = float(df["close"].iloc[-2]) if len(df) >= 2 else close
+    if close <= 0:
+        return None
+    chg = close - prev
+    chg_pct = (chg / prev * 100) if prev else 0.0
+    return {
+        "symbol": symbol,
+        "price": round(close, 4),
+        "prev_close": round(prev, 4),
+        "change": round(chg, 4),
+        "change_pct": round(chg_pct, 3),
+        "volume": int(float(df["volume"].iloc[-1])) if "volume" in df.columns else 0,
+        "high": round(float(df["high"].iloc[-1]), 4),
+        "low": round(float(df["low"].iloc[-1]), 4),
+        "open": round(float(df["open"].iloc[-1]), 4),
+        "timestamp": df.index[-1].isoformat() if len(df.index) else datetime.utcnow().isoformat(),
+        "source": source,
+    }
+
+
+def _seed_local_market_state(symbols: Optional[list[str]] = None) -> dict[str, int]:
+    """
+    Hydrate candles/prices from local cache so the dashboard can function without
+    waiting for live network fetches.
+    """
+    syms = symbols or (state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS)
+    candles_loaded = 0
+    prices_loaded = 0
+    for sym in syms:
+        df = _get_cached_candles(sym, bars=300)
+        if not df.empty:
+            candles_loaded += 1
+            if sym not in state.prices or not state.prices[sym].get("price"):
+                payload = _price_payload_from_df(sym, df)
+                if payload:
+                    state.prices[sym] = payload
+                    prices_loaded += 1
+    if prices_loaded:
+        state.health["last_price_update"] = datetime.utcnow().isoformat()
+        state.health["price_updates_total"] = max(1, state.health.get("price_updates_total", 0))
+        if state.health.get("data_feed") in {"offline", "error", None}:
+            state.health["data_feed"] = "cache"
+    return {"candles": candles_loaded, "prices": prices_loaded}
+
+
+def _refresh_signal_cache(symbols: Optional[list[str]] = None) -> dict[str, int]:
+    """Populate signal state from whatever cached candles are currently available."""
+    if not strategy_engine:
+        return {"day": 0, "swing": 0}
+    eq_syms = symbols or state.EQUITY_SYMBOLS
+    counts = {}
+    total = 0
+    for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
+        new_sigs = _run_signals(eq_syms, tm)
+        state.signals[key] = new_sigs
+        state.signals_json_cache[key] = json.dumps(new_sigs).encode()
+        for sig in new_sigs:
+            state.signal_history.appendleft(sig)
+        counts[key] = len(new_sigs)
+        total += len(new_sigs)
+    state.health["signals_generated"] = max(total, state.health.get("signals_generated", 0))
+    state.health["last_signal_run"] = datetime.utcnow().isoformat()
+    return counts
+
+
+def _bootstrap_dashboard_cache() -> dict[str, int]:
+    """Best-effort local bootstrap for candles, prices, and signals."""
+    seeded = _seed_local_market_state()
+    if seeded["candles"] > 0 and not (state.signals.get("day") or state.signals.get("swing")):
+        _refresh_signal_cache()
+    return seeded
 
 
 def _compute_indicators_for(symbol: str) -> Optional[dict]:
@@ -544,38 +1065,13 @@ _PRIORITY_SYMS = [
 ]
 
 def _batch_yf_download(symbols: list, period: str = "1y") -> dict:
-    """Download multiple symbols in a single yfinance call. Returns {sym: df}."""
-    try:
-        raw = yf.download(
-            symbols, period=period, interval="1d",
-            auto_adjust=True, progress=False, threads=True,
-            group_by="ticker",
-        )
-        result = {}
-        if len(symbols) == 1:
-            sym = symbols[0]
-            df = raw.copy()
-            if not df.empty:
-                df.columns = [c.lower() if isinstance(c, str) else c[0].lower() for c in df.columns]
-                df = df[["open","high","low","close","volume"]].dropna()
-                df.index = pd.to_datetime(df.index, utc=True)
-                result[sym] = df
-        else:
-            for sym in symbols:
-                try:
-                    df = raw[sym].copy().dropna(how="all")
-                    if df.empty:
-                        continue
-                    df.columns = [c.lower() for c in df.columns]
-                    df = df[["open","high","low","close","volume"]].dropna()
-                    df.index = pd.to_datetime(df.index, utc=True)
-                    result[sym] = df
-                except Exception:
-                    pass
-        return result
-    except Exception as e:
-        logger.warning(f"Batch yfinance download failed: {e}")
-        return {}
+    """Download symbols individually via free-provider aliases. Returns {sym: df}."""
+    result = {}
+    for sym in symbols:
+        df = _fetch_provider_history(sym, period=period, interval="1d")
+        if not df.empty:
+            result[sym] = df
+    return result
 
 
 async def price_feed_loop():
@@ -591,8 +1087,18 @@ async def price_feed_loop():
     _last_signal_run = 0.0   # force signal run immediately after first price fetch
     _bg_download_task: asyncio.Task | None = None  # non-blocking background download
 
+    # ── Immediate cache bootstrap: use local history before any live fetch ──────────
+    cache_seed = await asyncio.get_event_loop().run_in_executor(None, _bootstrap_dashboard_cache)
+    if cache_seed["candles"] or cache_seed["prices"]:
+        logger.info(
+            f"Local cache bootstrap: {cache_seed['candles']} candle sets, "
+            f"{cache_seed['prices']} prices ready"
+        )
+        if state.signals.get("day") or state.signals.get("swing"):
+            _last_signal_run = time.time()
+
     # ── Fast cold-start: priority symbols in one batch (~10-15s) ─────────────
-    if not state.candles:
+    if sum(1 for sym in _PRIORITY_SYMS if sym in state.candles and len(state.candles[sym]) >= 30) < 6:
         logger.info(f"Cold start: fetching {len(_PRIORITY_SYMS)} priority symbols...")
         priority_data = await asyncio.get_event_loop().run_in_executor(
             None, lambda: _batch_yf_download(_PRIORITY_SYMS, period="1y")
@@ -602,21 +1108,15 @@ async def price_feed_loop():
         logger.info(f"Priority symbols loaded: {len(priority_data)} ready — signals will generate now")
         # Run signals immediately on priority symbols — don't wait for full download
         if STRATEGY_OK and len(state.candles) > 0:
-            for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
-                try:
-                    new_sigs = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
-                    )
-                    state.signals[key] = new_sigs
-                    state.signals_json_cache[key] = json.dumps(new_sigs).encode()
-                    for s in new_sigs:
-                        state.signal_history.appendleft(s)
-                    state.health["signals_generated"] += len(new_sigs)
-                except Exception as e:
-                    logger.warning(f"Cold-start signal run failed: {e}")
+            try:
+                counts = await asyncio.get_event_loop().run_in_executor(None, _refresh_signal_cache)
+                logger.info(
+                    f"Cold-start signals generated: day={counts.get('day', 0)}, "
+                    f"swing={counts.get('swing', 0)}"
+                )
+            except Exception as e:
+                logger.warning(f"Cold-start signal run failed: {e}")
             _last_signal_run = time.time()
-            state.health["last_signal_run"] = datetime.utcnow().isoformat()
-            logger.info(f"Cold-start signals generated: day={len(state.signals.get('day',[]))}, swing={len(state.signals.get('swing',[]))}")
 
     async def _background_history_download():
         """Download remaining symbols in background without blocking signals."""
@@ -665,7 +1165,15 @@ async def price_feed_loop():
                 state.prices.update(price_data)
                 state.health["last_price_update"] = datetime.utcnow().isoformat()
                 state.health["price_updates_total"] += 1
-                state.health["data_feed"] = "live"
+                live_sources = {
+                    str(payload.get("source", "")).lower()
+                    for payload in price_data.values()
+                }
+                state.health["data_feed"] = (
+                    "live"
+                    if live_sources - {"", "cache"}
+                    else "cache"
+                )
                 # Seed equity curve from real SPY data once after first price batch
                 if not getattr(state, "_equity_curve_seeded", True):
                     await asyncio.get_event_loop().run_in_executor(
@@ -690,17 +1198,8 @@ async def price_feed_loop():
 
             # Run signals every 20s (and immediately on startup/history reload)
             if now - _last_signal_run >= 20 and len(state.candles) > 0:
-                for tm, key in [(TradingMode.DAY, "day"), (TradingMode.SWING, "swing")]:
-                    new_sigs = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda m=tm: _run_signals(state.EQUITY_SYMBOLS, m)
-                    )
-                    state.signals[key] = new_sigs
-                    state.signals_json_cache[key] = json.dumps(new_sigs).encode()
-                    for s in new_sigs:
-                        state.signal_history.appendleft(s)
-                    state.health["signals_generated"] += len(new_sigs)
+                await asyncio.get_event_loop().run_in_executor(None, _refresh_signal_cache)
                 _last_signal_run = now
-                state.health["last_signal_run"] = datetime.utcnow().isoformat()
 
             state.record_equity()
 
@@ -845,19 +1344,23 @@ async def startup():
         state.health["alpaca"] = "not configured — set ALPACA_API_KEY + ALPACA_SECRET_KEY in .env"
         logger.info("Alpaca keys not set — all prices via yfinance")
 
-    logger.info("AlphaGrid v7 started — 10-year real data mode")
+    logger.info("AlphaGrid v8 started — premium client platform, 10-year real data mode")
 
     # ── 10-year history download in background ────────────────────────────────
     if HIST_OK and history_manager:
         async def _download_10y_history():
             await asyncio.sleep(4)   # let server stabilize first
             all_syms = state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS
+            target_syms = [sym for sym in all_syms if not _has_local_history(sym, bars=90)]
+            if not target_syms:
+                logger.info("[History] Local cache already warm — skipping full download")
+                return
             logger.info(
-                f"[History] Starting 10-year download — "
-                f"{len(all_syms)} symbols, daily interval…"
+                f"[History] Starting targeted 10-year download — "
+                f"{len(target_syms)}/{len(all_syms)} symbols missing local history"
             )
             result = await history_manager.download_full_history(
-                symbols   = all_syms,
+                symbols   = target_syms,
                 intervals = ["1d"],
                 force     = False,
             )
@@ -867,7 +1370,7 @@ async def startup():
                 f"{len(result.get('errors',[]))} errors"
             )
             # Update candles cache from DB for live signal generation
-            for sym in all_syms:
+            for sym in target_syms:
                 df = history_manager.get_latest_n(sym, "1d", 300)
                 if not df.empty and sym not in state.candles:
                     state.candles[sym] = df
@@ -882,22 +1385,847 @@ async def startup():
 #  REST ENDPOINTS
 # ═════════════════════════════════════════════════════════════════════════════
 
-@app.get("/api/health")
-async def get_health():
+def _health_snapshot() -> dict:
     return {
         **state.health,
-        "n_symbols_cached":  len(state.candles),
-        "n_prices_live":     len(state.prices),
-        "n_signals":         len(state.signals.get("day", [])) + len(state.signals.get("swing", [])),
-        "n_ws_clients":      ws_manager.n_clients,
-        "uptime_seconds":    int((datetime.utcnow() - datetime.fromisoformat(
-                                  state.health["uptime_start"])).total_seconds()),
+        "n_symbols_cached": len(state.candles),
+        "n_prices_live": len(state.prices),
+        "n_signals": len(state.signals.get("day", [])) + len(state.signals.get("swing", [])),
+        "n_ws_clients": ws_manager.n_clients,
+        "uptime_seconds": int(
+            (
+                datetime.utcnow()
+                - datetime.fromisoformat(state.health["uptime_start"])
+            ).total_seconds()
+        ),
+        "missing_symbols": [
+            sym
+            for sym in (state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS)
+            if sym not in state.prices
+        ],
     }
+
+
+def _bootstrap_payload(mode: str = "day") -> dict:
+    key = "swing" if mode == "swing" else "day"
+    return {
+        "health": _health_snapshot(),
+        "portfolio": {
+            **state.portfolio,
+            "positions": list(state.positions.values()),
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+        "positions": list(state.positions.values()),
+        "prices": state.prices,
+        "signals": state.signals.get(key, [])[:200],
+        "equity_curve": state.equity_curve,
+        "mode": key,
+        "server_time": datetime.utcnow().isoformat(),
+    }
+
+
+def _price_state_stale(max_age_seconds: int = 45) -> bool:
+    last_update = state.health.get("last_price_update")
+    if not last_update:
+        return True
+    try:
+        last_dt = datetime.fromisoformat(str(last_update).replace("Z", "+00:00"))
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - last_dt.astimezone(timezone.utc)).total_seconds()
+        return age > max_age_seconds
+    except Exception:
+        return True
+
+
+def _quote_payload_stale(payload: Optional[dict], max_age_seconds: int = 45) -> bool:
+    if not payload:
+        return True
+    timestamp = payload.get("timestamp")
+    if not timestamp:
+        return True
+    try:
+        quote_dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        if quote_dt.tzinfo is None:
+            quote_dt = quote_dt.replace(tzinfo=timezone.utc)
+        age = (datetime.now(timezone.utc) - quote_dt.astimezone(timezone.utc)).total_seconds()
+        return age > max_age_seconds
+    except Exception:
+        return True
+
+
+def _feed_label_from_payloads(payloads: dict[str, dict]) -> str:
+    live_sources = {
+        str(item.get("source", "")).lower()
+        for item in payloads.values()
+    }
+    return "live" if any(src.startswith("yahoo-quote") or src in {"alpaca", "stooq"} for src in live_sources) else "cache"
+
+
+def _quote_from_candle_cache(symbol: str, df: Optional[pd.DataFrame] = None) -> Optional[dict]:
+    candle_df = df if df is not None else state.candles.get(symbol)
+    if candle_df is None or candle_df.empty:
+        return None
+    try:
+        tail = candle_df.dropna().tail(2)
+        if tail.empty:
+            return None
+        last_ts = pd.Timestamp(tail.index[-1])
+        if last_ts.tzinfo is None:
+            last_ts = last_ts.tz_localize("UTC")
+        else:
+            last_ts = last_ts.tz_convert("UTC")
+        last_row = tail.iloc[-1]
+        prev_close = float(tail.iloc[-2]["close"]) if len(tail) >= 2 else float(last_row["close"])
+        price = round(float(last_row["close"]), 4)
+        change = round(price - prev_close, 4)
+        change_pct = round((change / prev_close) * 100, 3) if prev_close else 0.0
+        return {
+            "symbol": symbol,
+            "price": price,
+            "prev_close": round(prev_close, 4),
+            "change": change,
+            "change_pct": change_pct,
+            "volume": int(float(last_row.get("volume", 0) or 0)),
+            "high": round(float(last_row.get("high", price) or price), 4),
+            "low": round(float(last_row.get("low", price) or price), 4),
+            "open": round(float(last_row.get("open", prev_close) or prev_close), 4),
+            "timestamp": last_ts.isoformat(),
+            "source": "candle-cache",
+            "market_state": "CACHED_CLOSE",
+        }
+    except Exception:
+        return None
+
+
+def _refresh_quote_from_chart_history(symbol: str, range_value: str = "1mo") -> Optional[dict]:
+    try:
+        df = _fetch_yahoo_chart_history(symbol, "1d", range_value)
+    except Exception:
+        df = pd.DataFrame()
+    if df is None or df.empty:
+        return None
+    state.candles[symbol] = df.tail(300)
+    return _quote_from_candle_cache(symbol, df)
+
+
+def _ticker_profile(sym: str) -> dict:
+    if "=" in sym:
+        clean = sym.replace("=X", "")
+        display = f"{clean[:3]}/{clean[3:]}" if len(clean) == 6 else clean
+        return {
+            "symbol": sym,
+            "display_symbol": display,
+            "asset_class": "forex",
+            "market_label": "FX Macro Desk",
+            "description": "Institutional foreign-exchange pair monitored through live quotes, rolling signals, and macro-news catalyst flow.",
+            "provider_variants": _provider_symbol_variants(sym),
+        }
+    if sym in _ETF_SYMBOLS:
+        return {
+            "symbol": sym,
+            "display_symbol": sym,
+            "asset_class": "etf",
+            "market_label": "Macro / ETF Exposure",
+            "description": "Liquid exchange-traded proxy used for fast macro exposure, hedging, and regime tracking across the desk.",
+            "provider_variants": _provider_symbol_variants(sym),
+        }
+    return {
+        "symbol": sym,
+        "display_symbol": sym,
+        "asset_class": "equity",
+        "market_label": "US Equity Desk",
+        "description": "US-listed instrument tracked through real-time pricing, technical state, live signal scoring, and ticker-specific news flow.",
+        "provider_variants": _provider_symbol_variants(sym),
+    }
+
+
+def _ticker_stats_from_df(df: pd.DataFrame) -> dict:
+    out = {
+        "bars": 0,
+        "from": None,
+        "to": None,
+        "return_1m": None,
+        "return_3m": None,
+        "return_1y": None,
+        "high_52w": None,
+        "low_52w": None,
+        "avg_volume_30d": None,
+        "volatility_30d": None,
+    }
+    if df is None or df.empty:
+        return out
+    data = _normalize_ohlcv(df).dropna()
+    if data.empty:
+        return out
+    closes = data["close"]
+    out["bars"] = int(len(data))
+    out["from"] = str(data.index[0])[:10]
+    out["to"] = str(data.index[-1])[:10]
+    last_close = float(closes.iloc[-1])
+
+    def _window_return(n: int) -> Optional[float]:
+        if len(closes) <= n:
+            return None
+        start = float(closes.iloc[-(n + 1)])
+        return round(((last_close - start) / start) * 100, 2) if start else None
+
+    out["return_1m"] = _window_return(21)
+    out["return_3m"] = _window_return(63)
+    out["return_1y"] = _window_return(252)
+    tail_252 = data.tail(min(252, len(data)))
+    out["high_52w"] = round(float(tail_252["high"].max()), 4)
+    out["low_52w"] = round(float(tail_252["low"].min()), 4)
+    if "volume" in data.columns:
+        out["avg_volume_30d"] = int(float(data["volume"].tail(min(30, len(data))).mean() or 0))
+    rets = closes.pct_change().dropna().tail(min(30, max(len(closes) - 1, 1)))
+    if not rets.empty:
+        out["volatility_30d"] = round(float(rets.std() * np.sqrt(252) * 100), 2)
+    return out
+
+
+def _symbol_signal_snapshot(sym: str, mode: str = "day") -> dict:
+    key = "swing" if str(mode).lower() == "swing" else "day"
+    active = [
+        sig for sig in state.signals.get(key, [])
+        if sig.get("symbol") == sym
+    ]
+    active.sort(key=lambda s: s.get("confidence", 0), reverse=True)
+    history = [
+        sig for sig in list(state.signal_history)
+        if sig.get("symbol") == sym and str(sig.get("mode", key)).lower() == key
+    ][:8]
+    return {
+        "latest": active[0] if active else None,
+        "active": active[:8],
+        "history": history,
+        "mode": key,
+    }
+
+
+def _build_ticker_timeline(sym: str, signal_pack: dict, recent_trades: list[dict], news_articles: list[dict], quote: Optional[dict]) -> list[dict]:
+    events: list[dict] = []
+    latest_signal = signal_pack.get("latest") or {}
+
+    if latest_signal:
+        ts = latest_signal.get("timestamp") or latest_signal.get("created_at") or (quote or {}).get("timestamp")
+        direction = (latest_signal.get("direction") or latest_signal.get("signal") or "FLAT").upper()
+        events.append({
+            "type": "signal",
+            "timestamp": ts,
+            "headline": f"{direction} signal armed",
+            "summary": f"{(latest_signal.get('strategy') or 'system').replace('_',' ')} • entry {latest_signal.get('entry') or latest_signal.get('entry_price') or 'market'}",
+            "tone": "positive" if direction == "LONG" else "negative" if direction == "SHORT" else "neutral",
+        })
+
+    for trade in recent_trades[:4]:
+        ts = trade.get("closed_at") or trade.get("opened_at")
+        pnl = float(trade.get("pnl", 0) or 0)
+        events.append({
+            "type": "trade",
+            "timestamp": ts,
+            "headline": f"{(trade.get('side') or 'TRADE').upper()} trade closed",
+            "summary": f"Entry {trade.get('entry_price')} • Exit {trade.get('exit_price')} • P&L {'+' if pnl >= 0 else ''}{round(pnl, 2)}",
+            "tone": "positive" if pnl >= 0 else "negative",
+        })
+
+    for item in news_articles[:8]:
+        cat = (item.get("category") or "general").lower()
+        score = float(item.get("sentiment", {}).get("score", 0) or 0)
+        events.append({
+            "type": cat,
+            "timestamp": item.get("published") or item.get("fetched_at"),
+            "headline": item.get("headline") or "Market event",
+            "summary": item.get("summary") or item.get("source") or "",
+            "tone": "positive" if score > 0.08 else "negative" if score < -0.08 else "neutral",
+            "source": item.get("source"),
+        })
+
+    def _ts(v):
+        try:
+            if not v:
+                return 0.0
+            return pd.Timestamp(v).timestamp()
+        except Exception:
+            return 0.0
+
+    events.sort(key=lambda e: _ts(e.get("timestamp")), reverse=True)
+    return events[:10]
+
+
+def _build_trade_plan(latest_signal: Optional[dict], recent_trades: list[dict]) -> list[dict]:
+    plan: list[dict] = []
+    if latest_signal:
+        direction = (latest_signal.get("direction") or latest_signal.get("signal") or "FLAT").upper()
+        entry = latest_signal.get("entry") or latest_signal.get("entry_price")
+        if entry:
+            plan.append({
+                "kind": "signal",
+                "label": f"{direction} setup",
+                "direction": direction,
+                "entry_price": entry,
+                "exit_price": None,
+                "stop_loss": latest_signal.get("stop_loss"),
+                "take_profit": latest_signal.get("take_profit"),
+                "confidence": latest_signal.get("confidence"),
+                "timestamp": latest_signal.get("timestamp"),
+            })
+    for trade in recent_trades[:4]:
+        plan.append({
+            "kind": "trade",
+            "label": f"{(trade.get('side') or 'TRADE').upper()} closed",
+            "direction": (trade.get("side") or "TRADE").upper(),
+            "entry_price": trade.get("entry_price"),
+            "exit_price": trade.get("exit_price"),
+            "stop_loss": None,
+            "take_profit": None,
+            "confidence": None,
+            "timestamp": trade.get("closed_at") or trade.get("opened_at"),
+            "pnl": trade.get("pnl"),
+        })
+    return plan
+
+
+def _safe_float(value) -> Optional[float]:
+    try:
+        if value is None or value == "":
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _format_money_compact(value: Optional[float]) -> str:
+    if value is None:
+        return "—"
+    amt = float(value)
+    abs_amt = abs(amt)
+    if abs_amt >= 1_000_000_000:
+        return f"${amt / 1_000_000_000:.2f}B"
+    if abs_amt >= 1_000_000:
+        return f"${amt / 1_000_000:.2f}M"
+    if abs_amt >= 1_000:
+        return f"${amt / 1_000:.1f}K"
+    return f"${amt:,.0f}"
+
+
+def _normalize_holder_rows(frame) -> list[dict]:
+    if frame is None or getattr(frame, "empty", True):
+        return []
+    rows: list[dict] = []
+    cols = {str(c).strip().lower(): c for c in frame.columns}
+    for _, row in frame.head(8).iterrows():
+        holder = row.get(cols.get("holder")) or row.get(cols.get("institution")) or row.get("Holder")
+        if not holder:
+            continue
+        shares = _safe_float(row.get(cols.get("shares")) or row.get("Shares"))
+        value = _safe_float(row.get(cols.get("value")) or row.get("Value"))
+        pct = _safe_float(
+            row.get(cols.get("% out"))
+            or row.get(cols.get("pctheld"))
+            or row.get(cols.get("% held"))
+            or row.get(cols.get("ownership"))
+        )
+        date_value = (
+            row.get(cols.get("date reported"))
+            or row.get(cols.get("report date"))
+            or row.get(cols.get("date"))
+        )
+        rows.append(
+            {
+                "holder": str(holder),
+                "shares": int(shares) if shares is not None else None,
+                "value": round(value, 2) if value is not None else None,
+                "pct_out": round(pct * 100, 2) if pct is not None and pct <= 1 else round(pct, 2) if pct is not None else None,
+                "date_reported": str(pd.Timestamp(date_value).date()) if date_value not in (None, "") else None,
+                "action": "holding",
+                "source": "Yahoo Finance filings",
+            }
+        )
+    return rows
+
+
+def _extract_smart_money_mentions(symbol: str, news_articles: list[dict]) -> list[dict]:
+    mentions: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    amount_pattern = re.compile(r"\$?\s?(\d+(?:\.\d+)?)\s*(billion|million|bn|mn|mln|m|b)\b", re.I)
+    pct_pattern = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+    action_map = [
+        ("sold", "Sold"),
+        ("trimmed", "Trimmed"),
+        ("reduced", "Reduced"),
+        ("cut", "Cut"),
+        ("dumped", "Sold"),
+        ("bought", "Bought"),
+        ("added", "Added"),
+        ("increased", "Increased"),
+        ("boosted", "Increased"),
+        ("initiated", "Initiated"),
+        ("disclosed", "Disclosed"),
+    ]
+
+    def _amount_text(blob: str) -> Optional[str]:
+        m = amount_pattern.search(blob)
+        if not m:
+            return None
+        num = float(m.group(1))
+        unit = m.group(2).lower()
+        multiplier = 1_000_000_000 if unit in {"billion", "bn", "b"} else 1_000_000
+        return _format_money_compact(num * multiplier)
+
+    for article in news_articles:
+        headline = str(article.get("headline") or "")
+        summary = str(article.get("summary") or "")
+        blob = f"{headline}. {summary}".lower()
+        if not blob.strip():
+            continue
+        entity_name = None
+        for entity in _SMART_MONEY_ENTITIES:
+            if any(alias in blob for alias in entity["aliases"]):
+                entity_name = entity["name"]
+                break
+        if not entity_name:
+            continue
+        action = next((label for key, label in action_map if key in blob), "Active")
+        amount_text = _amount_text(blob)
+        pct_match = pct_pattern.search(blob)
+        pct_text = f"{pct_match.group(1)}% portfolio" if pct_match else None
+        narrative_bits = [f"{entity_name} {action.lower()} {symbol}"]
+        if amount_text and pct_text:
+            narrative_bits.append(f"worth about {amount_text} ({pct_text})")
+        elif amount_text:
+            narrative_bits.append(f"worth about {amount_text}")
+        elif pct_text:
+            narrative_bits.append(f"equal to about {pct_text}")
+        key = (entity_name, action, headline.strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        mentions.append(
+            {
+                "entity": entity_name,
+                "action": action,
+                "headline": headline or f"{entity_name} activity detected",
+                "summary": " ".join(narrative_bits) + ".",
+                "amount": amount_text,
+                "portfolio_pct": pct_text,
+                "timestamp": article.get("published") or article.get("fetched_at"),
+                "source": article.get("source") or "Live news scan",
+                "url": article.get("url"),
+            }
+        )
+
+    def _ts(item: dict) -> float:
+        try:
+            return pd.Timestamp(item.get("timestamp")).timestamp()
+        except Exception:
+            return 0.0
+
+    mentions.sort(key=_ts, reverse=True)
+    return mentions[:6]
+
+
+def _institutional_flow_snapshot(symbol: str, news_articles: list[dict]) -> dict:
+    sym = symbol.upper()
+    cached = _institutional_flow_cache.get(sym)
+    now = time.time()
+    if cached and (now - cached.get("ts", 0)) < _INSTITUTIONAL_FLOW_TTL_SECONDS:
+        base = dict(cached["payload"])
+        base["smart_money_mentions"] = _extract_smart_money_mentions(sym, news_articles)
+        return base
+
+    holders: list[dict] = []
+    source_mix: list[str] = []
+    if YF_OK and "=" not in sym:
+        try:
+            tk = yf.Ticker(sym)
+            holders = _normalize_holder_rows(getattr(tk, "institutional_holders", None))
+            if holders:
+                source_mix.append("Yahoo Finance filings")
+        except Exception as e:
+            logger.debug(f"[institutional] {sym} holder snapshot unavailable: {e}")
+
+    mentions = _extract_smart_money_mentions(sym, news_articles)
+    if mentions:
+        source_mix.extend(sorted({m.get("source") or "Live news" for m in mentions}))
+
+    if holders:
+        top_holder = holders[0]
+        pct_suffix = f" at {top_holder.get('pct_out')}% of shares out" if top_holder.get("pct_out") is not None else ""
+        summary = f"Latest disclosed holder snapshot is led by {top_holder['holder']}{pct_suffix}."
+    elif mentions:
+        top = mentions[0]
+        extras = []
+        if top.get("amount"):
+            extras.append(top["amount"])
+        if top.get("portfolio_pct"):
+            extras.append(top["portfolio_pct"])
+        summary = f"Recent smart-money headline flow shows {top['entity']} {top['action'].lower()} {sym}" + (
+            f" with {' • '.join(extras)}." if extras else "."
+        )
+    else:
+        summary = "No fresh institutional filing snapshot or credible fund-flow headline is available yet for this ticker."
+
+    payload = {
+        "holders": holders[:6],
+        "smart_money_mentions": mentions,
+        "summary": summary,
+        "source_mix": list(dict.fromkeys(source_mix))[:6],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _institutional_flow_cache[sym] = {"ts": now, "payload": payload}
+    return payload
+
+
+def _sec_user_agent() -> str:
+    return (
+        os.getenv("ALPHAGRID_SEC_USER_AGENT")
+        or os.getenv("SEC_USER_AGENT")
+        or "AlphaGrid Capital research@alphagrid.local"
+    )
+
+
+def _sec_fetch_text(url: str) -> str:
+    req = UrlRequest(
+        url,
+        headers={
+            "User-Agent": _sec_user_agent(),
+            "Accept": "application/json,application/xml,text/xml,text/plain,text/html,*/*",
+        },
+    )
+    with urlopen(req, timeout=12) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _sec_fetch_json(url: str) -> dict:
+    return json.loads(_sec_fetch_text(url))
+
+
+def _sec_ticker_map() -> dict[str, int]:
+    global _sec_ticker_map_cache, _sec_ticker_map_ts
+    now = time.time()
+    if _sec_ticker_map_cache and (now - _sec_ticker_map_ts) < _SEC_TICKER_MAP_TTL_SECONDS:
+        return _sec_ticker_map_cache
+    try:
+        payload = _sec_fetch_json("https://www.sec.gov/files/company_tickers.json")
+        mapping = {
+            str(item.get("ticker", "")).upper(): int(item.get("cik_str"))
+            for item in payload.values()
+            if item.get("ticker") and item.get("cik_str")
+        }
+        if mapping:
+            _sec_ticker_map_cache = mapping
+            _sec_ticker_map_ts = now
+    except Exception as e:
+        logger.debug(f"[sec] ticker map fetch failed: {e}")
+    return _sec_ticker_map_cache
+
+
+def _sec_cik_for_symbol(symbol: str) -> Optional[int]:
+    return _sec_ticker_map().get(symbol.upper())
+
+
+def _sec_role_summary(root: ET.Element) -> str:
+    rel = root.find(".//reportingOwner/reportingOwnerRelationship")
+    if rel is None:
+        return "Insider"
+    roles = []
+    if (rel.findtext("isDirector") or "").strip() == "1":
+        roles.append("Director")
+    if (rel.findtext("isOfficer") or "").strip() == "1":
+        title = (rel.findtext("officerTitle") or "").strip()
+        roles.append(title or "Officer")
+    if (rel.findtext("isTenPercentOwner") or "").strip() == "1":
+        roles.append("10% Owner")
+    if (rel.findtext("isOther") or "").strip() == "1":
+        roles.append((rel.findtext("otherText") or "Other Insider").strip())
+    return " • ".join([r for r in roles if r]) or "Insider"
+
+
+def _sec_transaction_action(code: str, acquired_disposed: str) -> str:
+    code = (code or "").upper()
+    ad = (acquired_disposed or "").upper()
+    if code == "P":
+        return "Open Market Buy"
+    if code == "S":
+        return "Open Market Sell"
+    if code == "M":
+        return "Option Exercise"
+    if code in {"A", "G"}:
+        return "Grant / Award"
+    if code in {"F", "D"} or ad == "D":
+        return "Disposition"
+    if ad == "A":
+        return "Acquisition"
+    return code or "Insider Filing"
+
+
+def _sec_parse_ownership_submission(raw_text: str, filing_meta: dict) -> list[dict]:
+    m = re.search(r"(<ownershipDocument[\s\S]*?</ownershipDocument>)", raw_text, re.I)
+    if not m:
+        return []
+    try:
+        root = ET.fromstring(m.group(1))
+    except Exception:
+        return []
+    owner_name = (
+        root.findtext(".//reportingOwner/reportingOwnerId/rptOwnerName")
+        or root.findtext(".//reportingOwner/reportingOwnerId/rptOwnerName/value")
+        or "Insider"
+    ).strip()
+    role = _sec_role_summary(root)
+    items: list[dict] = []
+    accession = filing_meta.get("accessionNumber")
+    filing_url = filing_meta.get("filing_url")
+    filing_date = filing_meta.get("filingDate")
+    form = filing_meta.get("form")
+
+    for txn in root.findall(".//nonDerivativeTransaction") + root.findall(".//derivativeTransaction"):
+        code = (txn.findtext(".//transactionCoding/transactionCode") or "").strip().upper()
+        ad_code = (txn.findtext(".//transactionAmounts/transactionAcquiredDisposedCode/value") or "").strip().upper()
+        shares = _safe_float(txn.findtext(".//transactionAmounts/transactionShares/value"))
+        price = _safe_float(txn.findtext(".//transactionAmounts/transactionPricePerShare/value"))
+        tx_date = txn.findtext(".//transactionDate/value") or filing_date
+        security = (txn.findtext(".//securityTitle/value") or "Common Stock").strip()
+        direct_code = (txn.findtext(".//ownershipNature/directOrIndirectOwnership/value") or "").strip().upper()
+        amount = round(shares * price, 2) if shares is not None and price is not None else None
+        items.append(
+            {
+                "insider": owner_name,
+                "role": role,
+                "action": _sec_transaction_action(code, ad_code),
+                "transaction_code": code or form or "4",
+                "security": security,
+                "transaction_date": tx_date,
+                "filing_date": filing_date,
+                "shares": int(shares) if shares is not None else None,
+                "price": round(price, 4) if price is not None else None,
+                "amount": amount,
+                "timestamp": filing_date or tx_date,
+                "ownership": "Direct" if direct_code == "D" else "Indirect" if direct_code == "I" else None,
+                "source": "SEC Form 3/4/5",
+                "url": filing_url,
+                "accession": accession,
+            }
+        )
+
+    items.sort(key=lambda item: str(item.get("filing_date") or item.get("transaction_date") or ""), reverse=True)
+    return items
+
+
+def _fetch_sec_insider_activity(symbol: str, limit: int = 8) -> dict:
+    sym = symbol.upper()
+    cik = _sec_cik_for_symbol(sym)
+    if not cik:
+        return {
+            "symbol": sym,
+            "available": False,
+            "items": [],
+            "summary": "SEC insider filing lookup is not available for this symbol.",
+            "source_mix": ["SEC EDGAR"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    try:
+        submissions = _sec_fetch_json(f"https://data.sec.gov/submissions/CIK{cik:010d}.json")
+    except Exception as e:
+        logger.debug(f"[sec] submissions fetch failed for {sym}: {e}")
+        return {
+            "symbol": sym,
+            "available": False,
+            "items": [],
+            "summary": "SEC insider filing feed is temporarily unavailable.",
+            "source_mix": ["SEC EDGAR"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    recent = submissions.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    filings: list[dict] = []
+    for idx, form in enumerate(forms):
+        if str(form).upper() not in {"3", "4", "5", "3/A", "4/A", "5/A"}:
+            continue
+        accession = recent.get("accessionNumber", [None])[idx]
+        filing_date = recent.get("filingDate", [None])[idx]
+        primary_doc = recent.get("primaryDocument", [None])[idx]
+        accession_clean = str(accession or "").replace("-", "")
+        if not accession_clean:
+            continue
+        base = f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession_clean}/"
+        filing_url = f"{base}{primary_doc}" if primary_doc else None
+        txt_url = f"{base}{accession_clean}.txt"
+        filings.append(
+            {
+                "form": str(form),
+                "accessionNumber": accession,
+                "filingDate": filing_date,
+                "filing_url": filing_url,
+                "txt_url": txt_url,
+            }
+        )
+        if len(filings) >= max(limit, 6):
+            break
+
+    items: list[dict] = []
+    for filing in filings:
+        try:
+            raw = _sec_fetch_text(filing["txt_url"])
+            items.extend(_sec_parse_ownership_submission(raw, filing))
+        except Exception as e:
+            logger.debug(f"[sec] ownership parse failed for {sym} {filing.get('accessionNumber')}: {e}")
+
+    items.sort(key=lambda item: str(item.get("filing_date") or item.get("transaction_date") or ""), reverse=True)
+    items = items[:limit]
+    if items:
+        lead = items[0]
+        summary = (
+            f"Latest SEC insider filing shows {lead['insider']} ({lead['role']}) "
+            f"{lead['action'].lower()} on {lead.get('transaction_date') or lead.get('filing_date')}."
+        )
+    else:
+        summary = "No recent SEC insider transactions were parsed for this ticker."
+    return {
+        "symbol": sym,
+        "available": bool(items),
+        "items": items,
+        "summary": summary,
+        "source_mix": ["SEC EDGAR"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _insider_activity_snapshot(symbol: str) -> dict:
+    sym = symbol.upper()
+    cached = _insider_activity_cache.get(sym)
+    now = time.time()
+    if cached and (now - cached.get("ts", 0)) < _SEC_INSIDER_TTL_SECONDS:
+        return dict(cached["payload"])
+    payload = _fetch_sec_insider_activity(sym)
+    _insider_activity_cache[sym] = {"ts": now, "payload": payload}
+    return payload
+
+
+def _model_training_progress_snapshot() -> dict:
+    if not _TRAINING_PROGRESS_FILE.exists():
+        return {
+            "available": False,
+            "progress_pct": 0.0,
+            "completed_symbols": 0,
+            "trained_symbols": 0,
+            "skipped_symbols": 0,
+            "target_symbols": 0,
+            "latest_symbol": None,
+            "summary": {},
+            "updated_at": None,
+        }
+    payload = None
+    last_error = None
+    for _ in range(3):
+        try:
+            payload = json.loads(_TRAINING_PROGRESS_FILE.read_text())
+            break
+        except Exception as e:
+            last_error = e
+            time.sleep(0.05)
+    if payload is None:
+        return {
+            "available": False,
+            "error": f"checkpoint unreadable: {last_error}",
+            "progress_pct": 0.0,
+            "completed_symbols": 0,
+            "trained_symbols": 0,
+            "skipped_symbols": 0,
+            "target_symbols": 0,
+            "latest_symbol": None,
+            "summary": {},
+            "updated_at": None,
+        }
+
+    symbols = list(payload.get("symbols") or [])
+    reports = list(payload.get("reports") or [])
+    skipped_raw = list(payload.get("skipped_symbols") or [])
+    skipped_symbols = [
+        item.get("symbol") if isinstance(item, dict) else str(item)
+        for item in skipped_raw
+        if item
+    ]
+    latest_report = reports[-1] if reports else None
+    latest_symbol = (
+        latest_report.get("symbol") if isinstance(latest_report, dict) else None
+    ) or (skipped_symbols[-1] if skipped_symbols else None)
+    completed_symbols = len(reports) + len(skipped_symbols)
+    target_symbols = len(symbols)
+    progress_pct = round((completed_symbols / target_symbols) * 100, 2) if target_symbols else 0.0
+    return {
+        "available": True,
+        "checkpoint_path": str(_TRAINING_PROGRESS_FILE),
+        "generated_at": payload.get("generated_at"),
+        "updated_at": datetime.utcnow().isoformat(),
+        "target_symbols": target_symbols,
+        "completed_symbols": completed_symbols,
+        "trained_symbols": len(reports),
+        "skipped_symbols": len(skipped_symbols),
+        "remaining_symbols": max(target_symbols - completed_symbols, 0),
+        "progress_pct": progress_pct,
+        "latest_symbol": latest_symbol,
+        "latest_result": latest_report or {},
+        "summary": payload.get("summary") or {},
+    }
+
+@app.get("/api/health")
+async def get_health():
+    return _health_snapshot()
+
+
+@app.get("/api/bootstrap")
+async def get_bootstrap(mode: str = "day"):
+    """
+    Return a coherent dashboard snapshot in one call.
+    This avoids partial page hydration when individual endpoint calls race or fail.
+    """
+    await asyncio.get_event_loop().run_in_executor(None, _bootstrap_dashboard_cache)
+    all_symbols = state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS
+    if _price_state_stale() or len(state.prices) < max(24, len(all_symbols) // 2):
+        live_prices = await asyncio.get_event_loop().run_in_executor(None, lambda: _yf_batch_prices(all_symbols))
+        if live_prices:
+            state.prices.update(live_prices)
+            state.health["last_price_update"] = datetime.utcnow().isoformat()
+            state.health["price_updates_total"] = state.health.get("price_updates_total", 0) + 1
+            state.health["data_feed"] = _feed_label_from_payloads(live_prices)
+    if len(state.prices) < max(24, len(state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS) // 3):
+        await asyncio.get_event_loop().run_in_executor(None, _seed_local_market_state)
+    key = "swing" if mode == "swing" else "day"
+    if not state.signals.get(key):
+        await asyncio.get_event_loop().run_in_executor(None, _refresh_signal_cache)
+    return _bootstrap_payload(mode)
 
 
 @app.get("/api/prices")
 async def get_prices(symbols: Optional[str] = None):
     """Return live prices. Optional ?symbols=AAPL,MSFT comma filter."""
+    target_syms = None
+    if symbols:
+        target_syms = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    missing_requested = target_syms and any(sym not in state.prices for sym in target_syms)
+    stale_requested = target_syms and any(_quote_payload_stale(state.prices.get(sym)) for sym in target_syms)
+    if _price_state_stale() or not state.prices or missing_requested or stale_requested:
+        refreshed = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _yf_batch_prices(target_syms or (state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS)),
+        )
+        if refreshed:
+            state.prices.update(refreshed)
+            state.health["last_price_update"] = datetime.utcnow().isoformat()
+            state.health["price_updates_total"] = state.health.get("price_updates_total", 0) + 1
+            state.health["data_feed"] = _feed_label_from_payloads(refreshed)
+    if target_syms:
+        for sym in target_syms:
+            if _quote_payload_stale(state.prices.get(sym)):
+                candle_quote = _refresh_quote_from_chart_history(sym) or _quote_from_candle_cache(sym)
+                if candle_quote:
+                    state.prices[sym] = candle_quote
+    if not state.prices or missing_requested:
+        await asyncio.get_event_loop().run_in_executor(None, lambda: _seed_local_market_state(target_syms))
     if symbols:
         syms = [s.strip().upper() for s in symbols.split(",")]
         return {s: state.prices[s] for s in syms if s in state.prices}
@@ -907,13 +2235,16 @@ async def get_prices(symbols: Optional[str] = None):
 @app.get("/api/prices/{symbol}")
 async def get_price_single(symbol: str):
     sym = symbol.upper()
-    if sym not in state.prices:
-        # Try a fresh fetch
+    if _quote_payload_stale(state.prices.get(sym)):
         data = await asyncio.get_event_loop().run_in_executor(
             None, lambda: _yf_batch_prices([sym])
         )
         if sym in data:
             state.prices[sym] = data[sym]
+    if _quote_payload_stale(state.prices.get(sym)):
+        candle_quote = _refresh_quote_from_chart_history(sym) or _quote_from_candle_cache(sym)
+        if candle_quote:
+            state.prices[sym] = candle_quote
     return state.prices.get(sym) or JSONResponse(
         {"error": f"{sym} not found"}, status_code=404
     )
@@ -974,6 +2305,8 @@ async def get_signals(
 ):
     """Return latest generated trading signals filtered by mode."""
     key = "swing" if mode == "swing" else "day"
+    if not state.signals.get(key):
+        await asyncio.get_event_loop().run_in_executor(None, _bootstrap_dashboard_cache)
     # Return pre-cached JSON bytes directly — avoids re-serializing on every request
     if min_confidence == 0.0 and limit >= 500:
         cached = state.signals_json_cache.get(key)
@@ -1067,8 +2400,9 @@ async def get_decay():
 async def refresh_signals(mode: str = "day"):
     """Force-trigger a signal generation run (async, returns immediately)."""
     tm = TradingMode.DAY if mode == "day" else TradingMode.SWING
+    await asyncio.get_event_loop().run_in_executor(None, _bootstrap_dashboard_cache)
     new_sigs = await asyncio.get_event_loop().run_in_executor(
-        None, lambda: _run_signals(state.EQUITY_SYMBOLS[:20], tm)
+        None, lambda: _run_signals(state.EQUITY_SYMBOLS, tm)
     )
     key = "swing" if mode == "swing" else "day"
     state.signals[key] = new_sigs
@@ -1400,28 +2734,26 @@ async def get_divergence():
 @app.get("/api/universe")
 async def get_universe():
     """Return all tracked symbols with live prices and basic stats."""
+    if not state.candles and not state.prices:
+        await asyncio.get_event_loop().run_in_executor(None, _bootstrap_dashboard_cache)
     result = []
     for sym in state.EQUITY_SYMBOLS + state.FOREX_SYMBOLS:
         p = state.prices.get(sym, {})
-        has_candles = sym in state.candles and len(state.candles[sym]) >= 30
+        df = state.candles.get(sym)
+        if df is None or len(df) < 30:
+            df = _get_cached_candles(sym, bars=300)
+        has_candles = df is not None and len(df) >= 30
 
         # Use live price if valid, otherwise fall back to last candle close
         price      = p.get("price")
         change     = p.get("change")
         change_pct = p.get("change_pct")
         if (not price or price == 0) and has_candles:
-            df = state.candles[sym]
-            # Flatten multi-level columns if present (yfinance batch download)
-            if isinstance(df.columns, pd.MultiIndex):
-                df = df.xs(sym, axis=1, level=1) if sym in df.columns.get_level_values(1) else df.droplevel(1, axis=1)
-            close_col = "Close" if "Close" in df.columns else (df.columns[3] if len(df.columns) >= 4 else df.columns[0])
-            if len(df) >= 2:
-                price      = round(float(df[close_col].iloc[-1]), 4)
-                prev       = round(float(df[close_col].iloc[-2]), 4)
-                change     = round(price - prev, 4)
-                change_pct = round((change / prev * 100) if prev else 0.0, 3)
-            elif len(df) == 1:
-                price = round(float(df[close_col].iloc[-1]), 4)
+            payload = _price_payload_from_df(sym, df)
+            if payload:
+                price = payload["price"]
+                change = payload["change"]
+                change_pct = payload["change_pct"]
 
         result.append({
             "symbol":      sym,
@@ -1438,6 +2770,8 @@ async def get_universe():
 @app.get("/api/sector-heatmap")
 async def get_sector_heatmap():
     """Return per-symbol change_pct for heatmap rendering."""
+    if not state.prices:
+        await asyncio.get_event_loop().run_in_executor(None, _seed_local_market_state)
     if _UNIVERSE_OK:
         from core.ticker_universe import SECTOR_MAP
         sectors = {k: v for k, v in SECTOR_MAP.items()}
@@ -1457,10 +2791,17 @@ async def get_sector_heatmap():
         result[sector] = []
         for sym in syms:
             p = state.prices.get(sym, {})
+            change_pct = p.get("change_pct")
+            price = p.get("price")
+            if change_pct is None or price is None:
+                payload = _price_payload_from_df(sym, _get_cached_candles(sym, bars=120))
+                if payload:
+                    price = payload["price"]
+                    change_pct = payload["change_pct"]
             result[sector].append({
                 "symbol": sym,
-                "price":  p.get("price"),
-                "change_pct": p.get("change_pct", 0.0),
+                "price":  price,
+                "change_pct": change_pct,
             })
     return result
 
@@ -1523,11 +2864,11 @@ except Exception as e:
 
 
 async def news_background_loop():
-    """Background task: fetch news every 5 minutes."""
+    """Background task: refresh free news feeds on a near-real-time cadence."""
     if not NEWS_OK or _news_feed is None:
         logger.warning("News feed disabled — install feedparser: pip install feedparser")
         return
-    await _news_feed.run(interval_minutes=5.0)
+    await _news_feed.run(interval_minutes=1.0)
 
 
 @app.on_event("startup")
@@ -1608,6 +2949,73 @@ async def get_symbol_sentiment(symbol: str, hours: float = 4.0):
     if not NEWS_OK or _news_feed is None:
         return {"symbol": symbol, "score": 0, "label": "neutral", "article_count": 0}
     return _news_feed.get_symbol_sentiment(symbol.upper(), hours)
+
+
+@app.get("/api/ticker/{symbol}/intel")
+async def get_ticker_intel(symbol: str, mode: str = "day"):
+    """Institutional-style ticker intelligence snapshot used by the symbol detail page."""
+    sym = symbol.upper()
+    mode_key = "swing" if str(mode).lower() == "swing" else "day"
+    if sym not in state.candles or len(state.candles.get(sym, [])) < 30:
+        await asyncio.get_event_loop().run_in_executor(None, lambda: _seed_local_market_state([sym]))
+    if _quote_payload_stale(state.prices.get(sym)):
+        refreshed = await asyncio.get_event_loop().run_in_executor(None, lambda: _yf_batch_prices([sym]))
+        if sym in refreshed:
+            state.prices[sym] = refreshed[sym]
+    if _quote_payload_stale(state.prices.get(sym)):
+        candle_quote = await asyncio.get_event_loop().run_in_executor(None, lambda: _refresh_quote_from_chart_history(sym, "1y"))
+        if candle_quote:
+            state.prices[sym] = candle_quote
+
+    df = state.candles.get(sym)
+    if df is None or df.empty:
+        df = await asyncio.get_event_loop().run_in_executor(None, lambda: _yf_history(sym, "10y", "1d"))
+        if df is not None and not df.empty:
+            state.candles[sym] = df.tail(3000)
+    stats = _ticker_stats_from_df(df if df is not None else pd.DataFrame())
+    indicators = await asyncio.get_event_loop().run_in_executor(None, lambda: _compute_indicators_for(sym))
+    signal_pack = _symbol_signal_snapshot(sym, mode_key)
+    recent_trades = [t for t in state.trades if t.get("symbol") == sym][:8]
+    position = state.positions.get(sym)
+
+    news_articles = []
+    sentiment = {"symbol": sym, "score": 0.0, "label": "neutral", "article_count": 0, "hours": 6.0}
+    if NEWS_OK and _news_feed is not None:
+        try:
+            await asyncio.wait_for(_news_feed.fetch_ticker(sym), timeout=6.0)
+        except Exception:
+            pass
+        news_articles = _news_feed.get_latest(limit=12, symbol=sym)
+        sentiment = _news_feed.get_symbol_sentiment(sym, hours=6.0)
+
+    quote = state.prices.get(sym) or _quote_from_candle_cache(sym, df)
+    timeline = _build_ticker_timeline(sym, signal_pack, recent_trades, news_articles, quote)
+    trade_plan = _build_trade_plan(signal_pack.get("latest"), recent_trades)
+    institutional_flow = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: _institutional_flow_snapshot(sym, news_articles)
+    )
+    insider_activity = await asyncio.get_event_loop().run_in_executor(
+        None, lambda: _insider_activity_snapshot(sym)
+    )
+    return {
+        "symbol": sym,
+        "mode": mode_key,
+        "profile": _ticker_profile(sym),
+        "quote": quote,
+        "stats": stats,
+        "position": position,
+        "signals": signal_pack,
+        "recent_trades": recent_trades,
+        "indicators": indicators or {},
+        "news": {
+            "articles": news_articles,
+            "sentiment": sentiment,
+        },
+        "timeline": timeline,
+        "trade_plan": trade_plan,
+        "institutional_flow": institutional_flow,
+        "insider_activity": insider_activity,
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1920,6 +3328,49 @@ def _synthetic_eval_data(n: int = 500, seed: int = 42) -> tuple:
     return y_true, y_prob
 
 
+def _eval_detail_payload(model_name: str, payload: Optional[dict] = None) -> dict:
+    """Hydrate eval detail responses with ROC points, threshold, and sample metadata."""
+    data = dict(payload or {})
+    seed = abs(hash(model_name)) % 1000
+    y_true, y_prob = _synthetic_eval_data(500, seed)
+    threshold = float(data.get("threshold") or 0.5)
+    y_pred = (y_prob >= threshold).astype(int)
+
+    tn = int(((y_pred == 0) & (y_true == 0)).sum())
+    fp = int(((y_pred == 1) & (y_true == 0)).sum())
+    fn = int(((y_pred == 0) & (y_true == 1)).sum())
+    tp = int(((y_pred == 1) & (y_true == 1)).sum())
+
+    if _sklearn_roc_curve is not None:
+        try:
+            fpr, tpr, _ = _sklearn_roc_curve(y_true.astype(int), y_prob)
+        except Exception:
+            fpr, tpr = np.array([0.0, 1.0]), np.array([0.0, 1.0])
+    else:
+        fpr, tpr = np.array([0.0, 1.0]), np.array([0.0, 1.0])
+
+    data.setdefault("model_name", model_name)
+    data["threshold"] = round(threshold, 4)
+    data["n_samples"] = int(data.get("n_samples") or len(y_true))
+    data["roc_curve"] = {
+        "fpr": [round(float(v), 4) for v in fpr.tolist()],
+        "tpr": [round(float(v), 4) for v in tpr.tolist()],
+    }
+
+    raw_cm = data.get("confusion_matrix")
+    if isinstance(raw_cm, dict):
+        data["confusion_matrix"] = [
+            int(raw_cm.get("tn", tn)),
+            int(raw_cm.get("fp", fp)),
+            int(raw_cm.get("fn", fn)),
+            int(raw_cm.get("tp", tp)),
+        ]
+    elif not (isinstance(raw_cm, (list, tuple)) and len(raw_cm) == 4):
+        data["confusion_matrix"] = [tn, fp, fn, tp]
+
+    return data
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  BROKER ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2202,30 +3653,55 @@ async def get_chart_data(
     symbol:   str,
     period:   str = "6mo",
     interval: str = "1d",
+    lookback: Optional[str] = Query(None, alias="range"),
+    mode: str = "day",
 ):
     """
     Return candlestick data + all indicator overlays + buy/sell signals
     in Lightweight Charts format.
     """
     sym = symbol.upper()
+    requested_interval = interval
+    interval_used = interval
+    fallback_reason = None
+    if sym not in state.candles or len(state.candles.get(sym, [])) < 10:
+        await asyncio.get_event_loop().run_in_executor(None, lambda: _seed_local_market_state([sym]))
 
-    # Intraday intervals must be fetched live from yfinance (no parquet cache)
-    intraday_period = {"1h": "60d", "15m": "7d", "5m": "2d"}
-    if interval != "1d":
-        fetch_period = intraday_period.get(interval, "60d")
-        def _fetch_intraday():
-            try:
-                tk = yf.Ticker(sym)
-                df = tk.history(period=fetch_period, interval=interval, auto_adjust=True)
-                if df.empty:
-                    return pd.DataFrame()
-                df.columns = [c.lower() for c in df.columns]
-                df.index = pd.to_datetime(df.index, utc=True)
-                return df[["open", "high", "low", "close", "volume"]].dropna()
-            except Exception as e:
-                logger.warning(f"Intraday fetch failed {sym} {interval}: {e}")
-                return pd.DataFrame()
-        df = await asyncio.get_event_loop().run_in_executor(None, _fetch_intraday)
+    chart_plan = {
+        "5m": {"provider_interval": "5m", "range": _CHART_INTERVAL_DEFAULT_RANGE["5m"], "resample": None},
+        "15m": {"provider_interval": "15m", "range": _CHART_INTERVAL_DEFAULT_RANGE["15m"], "resample": None},
+        "30m": {"provider_interval": "30m", "range": _CHART_INTERVAL_DEFAULT_RANGE["30m"], "resample": None},
+        "1h": {"provider_interval": "60m", "range": _CHART_INTERVAL_DEFAULT_RANGE["1h"], "resample": None},
+        "4h": {"provider_interval": "60m", "range": _CHART_INTERVAL_DEFAULT_RANGE["4h"], "resample": "4h"},
+        "1d": {"provider_interval": "1d", "range": _CHART_INTERVAL_DEFAULT_RANGE["1d"], "resample": None},
+        "1w": {"provider_interval": "1d", "range": _CHART_INTERVAL_DEFAULT_RANGE["1w"], "resample": "1W"},
+        "1mo": {"provider_interval": "1d", "range": _CHART_INTERVAL_DEFAULT_RANGE["1mo"], "resample": "1MS"},
+    }
+    plan = chart_plan.get(interval, chart_plan["1d"])
+    range_value = lookback or plan["range"]
+
+    if interval != "1d" or lookback is not None:
+        df = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _fetch_yahoo_chart_history(sym, plan["provider_interval"], range_value),
+        )
+        if not df.empty and plan["resample"]:
+            df = _resample_ohlcv(df, plan["resample"])
+        elif not df.empty and plan["provider_interval"] == "1d":
+            state.candles[sym] = df.tail(300)
+        if df is None or df.empty:
+            df = state.candles.get(sym)
+            if df is None or len(df) < 10:
+                df = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: _yf_history(sym, period, "1d")
+                )
+            if df is not None and not df.empty and plan["resample"]:
+                df = _resample_ohlcv(df, plan["resample"])
+                interval_used = requested_interval
+                fallback_reason = "resampled-cache-fallback"
+            else:
+                interval_used = "1d"
+                fallback_reason = "daily-cache-fallback"
     else:
         df = state.candles.get(sym)
         if df is None or len(df) < 10:
@@ -2341,44 +3817,115 @@ async def get_chart_data(
     except Exception as e:
         logger.warning(f"Chart overlays failed for {sym}: {e}")
 
-    # ── Buy/Sell signal markers ───────────────────────────────────────────
+    # ── Buy/Sell signal markers + explicit trade map ─────────────────────
     markers = []
+    marker_levels = []
+    mode_key = "swing" if str(mode).lower() == "swing" else "day"
+    def _closest_time(ts_value):
+        if not time_list:
+            return candles[-1]["time"] if candles else 0
+        try:
+            target = pd.Timestamp(ts_value).timestamp()
+            return min(time_list, key=lambda t: abs(t - target))
+        except Exception:
+            return candles[-1]["time"] if candles else 0
+
+    candle_times = {c["time"]: c for c in candles}
+    time_list    = sorted(candle_times.keys())
+
     # From current signal list
-    for sig in state.signals.get("day", []) + state.signals.get("swing", []):
+    for sig in state.signals.get(mode_key, []):
         if sig.get("symbol") != sym:
             continue
         direction = (sig.get("direction") or sig.get("signal") or "FLAT").upper()
         if direction not in ("LONG", "SHORT"):
             continue
         # Find the closest candle time
-        t = candles[-1]["time"] if candles else 0
+        t = _closest_time(sig.get("timestamp"))
+        entry = sig.get("entry") or sig.get("entry_price")
+        stop = sig.get("stop_loss")
+        take = sig.get("take_profit")
         markers.append({
             "time":     t,
             "position": "belowBar" if direction == "LONG" else "aboveBar",
             "color":    "#00ffc8" if direction == "LONG" else "#ff3366",
             "shape":    "arrowUp" if direction == "LONG" else "arrowDown",
-            "text":     f"{direction} {sig.get('strategy','')[:10]} {(sig.get('confidence',0)*100):.0f}%",
+            "text":     f"{direction} {entry:.2f}" if entry else f"{direction} {(sig.get('confidence',0)*100):.0f}%",
+        })
+        marker_levels.append({
+            "kind": "signal",
+            "direction": direction,
+            "strategy": sig.get("strategy"),
+            "time": t,
+            "entry_price": round(float(entry), 4) if entry else None,
+            "stop_loss": round(float(stop), 4) if stop else None,
+            "take_profit": round(float(take), 4) if take else None,
+            "confidence": sig.get("confidence"),
+            "label": f"{direction} setup",
         })
 
     # From signal history — map to closest candle times
-    candle_times = {c["time"]: c for c in candles}
-    time_list    = sorted(candle_times.keys())
     for sig in list(state.signal_history)[:50]:
         if sig.get("symbol") != sym:
+            continue
+        if str(sig.get("mode", mode_key)).lower() != mode_key:
             continue
         direction = (sig.get("direction") or sig.get("signal") or "FLAT").upper()
         if direction not in ("LONG", "SHORT"):
             continue
         # Skip already added
-        if any(m["time"] == (candles[-1]["time"] if candles else 0) for m in markers):
+        if any(m["time"] == _closest_time(sig.get("timestamp")) and m["text"].startswith(direction) for m in markers):
             continue
+        entry = sig.get("entry") or sig.get("entry_price")
         markers.append({
-            "time":     time_list[-1] if time_list else 0,
+            "time":     _closest_time(sig.get("timestamp")),
             "position": "belowBar" if direction == "LONG" else "aboveBar",
             "color":    "rgba(0,255,200,0.6)" if direction == "LONG" else "rgba(255,51,102,0.6)",
             "shape":    "arrowUp" if direction == "LONG" else "arrowDown",
-            "text":     direction,
+            "text":     f"{direction} {entry:.2f}" if entry else direction,
         })
+
+    for trade in list(state.trades)[:50]:
+        if trade.get("symbol") != sym:
+            continue
+        side = (trade.get("side") or "TRADE").upper()
+        exit_price = trade.get("exit_price")
+        entry_price = trade.get("entry_price")
+        t = _closest_time(trade.get("closed_at") or trade.get("opened_at"))
+        markers.append({
+            "time": t,
+            "position": "aboveBar" if side == "SELL" else "belowBar",
+            "color": "#f59e0b" if side == "SELL" else "#3b82f6",
+            "shape": "circle",
+            "text": f"{side} {exit_price:.2f}" if exit_price else side,
+        })
+        marker_levels.append({
+            "kind": "trade",
+            "direction": side,
+            "strategy": "closed_trade",
+            "time": t,
+            "entry_price": round(float(entry_price), 4) if entry_price else None,
+            "exit_price": round(float(exit_price), 4) if exit_price else None,
+            "stop_loss": None,
+            "take_profit": None,
+            "confidence": None,
+            "label": f"{side} closed",
+            "pnl": trade.get("pnl"),
+        })
+
+    if _quote_payload_stale(state.prices.get(sym)):
+        refreshed_quote = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: _yf_batch_prices([sym])
+        )
+        if sym in refreshed_quote:
+            state.prices[sym] = refreshed_quote[sym]
+            state.health["last_price_update"] = datetime.utcnow().isoformat()
+            state.health["price_updates_total"] = state.health.get("price_updates_total", 0) + 1
+            state.health["data_feed"] = _feed_label_from_payloads(refreshed_quote)
+    if _quote_payload_stale(state.prices.get(sym)):
+        candle_quote = _quote_from_candle_cache(sym, df)
+        if candle_quote:
+            state.prices[sym] = candle_quote
 
     # Use live price if available, otherwise fall back to last candle close
     _p = state.prices.get(sym, {})
@@ -2392,19 +3939,31 @@ async def get_chart_data(
 
     return {
         "symbol":   sym,
-        "interval": interval,
+        "mode": mode_key,
+        "interval": requested_interval,
+        "interval_used": interval_used,
+        "range": range_value,
         "candles":  candles,
         "volume":   volume_series,
         "overlays": overlays,
         "markers":  markers,
+        "marker_levels": marker_levels,
         "latest_price": _latest_price,
         "change_pct":   _change_pct,
+        "quote_timestamp": _p.get("timestamp"),
+        "quote_source": _p.get("source"),
+        "fallback_reason": fallback_reason,
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  MODEL EVALUATION ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/models/training-progress")
+async def get_model_training_progress():
+    """Return progress for the long-running 10-year premium model training batch."""
+    return _model_training_progress_snapshot()
 
 @app.get("/api/models/eval/summary")
 async def get_eval_summary():
@@ -2441,8 +4000,8 @@ async def get_model_eval(model_name: str):
         y_true, y_prob = _synthetic_eval_data(500)
         r = _evaluator.evaluate(model_name, y_true, y_prob)
         eval_store.record(r)
-        return r.to_dict()
-    return result
+        return _eval_detail_payload(model_name, r.to_dict())
+    return _eval_detail_payload(model_name, result)
 
 
 @app.get("/api/models/eval/{model_name}/history")
@@ -2541,7 +4100,7 @@ async def _startup_v4_noop():
             logger.info(f"Baseline model evaluations complete — {len(models)} models")
         asyncio.create_task(_baseline_evals())
 
-    logger.info("AlphaGrid v7 fully started — broker manager + model evaluator active")
+    logger.info("AlphaGrid v8 fully started — broker manager, evaluator, and premium client experience active")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -2612,40 +4171,35 @@ def _require_role(authorization: str, *allowed_roles: str) -> tuple[Optional[dic
 async def signup(request: Request, body: dict = None):
     """
     Register a new account.
-    Body: {email, username, password, first_name?, last_name?, role?}
-    Default role is TRADER. Only admins can create BUILDER/ADMIN accounts via API.
+    Body: {email, username?, password, display_name?, first_name?, last_name?}
+    All self-signup accounts are created as standard users.
     """
     if not AUTH_OK:
         return JSONResponse({"error": "Auth not configured"}, status_code=503)
     if body is None:
         body = await request.json()
 
-    email      = (body.get("email","")).strip()
-    username   = (body.get("username","")).strip()
-    password   = body.get("password","")
-    first_name = body.get("first_name","").strip()
-    last_name  = body.get("last_name","").strip()
-    role_str   = body.get("role","trader").lower()
+    email        = (body.get("email", "")).strip()
+    username     = (body.get("username", "")).strip()
+    password     = body.get("password", "")
+    display_name = (body.get("display_name", "")).strip()
+    first_name   = (body.get("first_name", "")).strip()
+    last_name    = (body.get("last_name", "")).strip()
 
-    if not email or not username or not password:
-        return JSONResponse({"error": "email, username and password are required"}, status_code=400)
+    if not email or not password:
+        return JSONResponse({"error": "email and password are required"}, status_code=400)
 
-    # Only allow trader self-signup; builder/admin require existing auth
-    allowed_self_roles = {UserRole.TRADER}
-    try:
-        role = UserRole(role_str)
-    except ValueError:
-        role = UserRole.TRADER
-
-    if role not in allowed_self_roles:
-        auth_hdr = request.headers.get("Authorization","")
-        payload, err = _require_role(auth_hdr, UserRole.ADMIN.value, UserRole.BUILDER.value)
-        if err:
-            role = UserRole.TRADER  # silently demote to trader
+    if not display_name:
+        display_name = f"{first_name} {last_name}".strip()
 
     user, err = user_manager.create_user(
-        email=email, username=username, password=password,
-        role=role, first_name=first_name, last_name=last_name,
+        email=email,
+        username=username,
+        password=password,
+        display_name=display_name,
+        role=UserRole.TRADER,
+        first_name=first_name,
+        last_name=last_name,
     )
     if err:
         return JSONResponse({"error": err}, status_code=400)
@@ -2736,7 +4290,7 @@ async def refresh_token(request: Request, refresh_token: str = Query(default="")
 async def get_me(authorization: str = Header(default="")):
     """Return current user profile from JWT."""
     if not AUTH_OK:
-        return {"id": 0, "role": "builder", "email": "demo@alphagrid.app"}
+        return {"id": 0, "role": "trader", "email": "user@alphagrid.app"}
     payload, err = _require_role(authorization)
     if err:
         return err
@@ -2822,183 +4376,6 @@ async def deactivate_user(user_id: str, authorization: str = Header(default=""))
         db.commit()
     user_manager.revoke_all_sessions(user_id)
     return {"ok": True, "deactivated": user_id}
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-#  v5 — AUTH SYSTEM
-# ═════════════════════════════════════════════════════════════════════════════
-
-try:
-    from core.auth_db import (
-        UserManager, Role, decode_token, create_access_token,
-        audit, get_audit_log, seed_default_accounts, JWT_SECRET,
-    )
-    seed_default_accounts()
-    AUTH_OK = True
-except Exception as _auth_err:
-    AUTH_OK = False
-    logger.warning(f"Auth system unavailable: {_auth_err}")
-
-from fastapi import Header
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-
-# ── Serve static HTML pages ───────────────────────────────────────────────────
-_DASH = Path(__file__).parent
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_auth():
-    p = _DASH / "auth.html"
-    return HTMLResponse(p.read_text()) if p.exists() else HTMLResponse("<h1>auth.html not found</h1>")
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def serve_dashboard():
-    p = _DASH / "index.html"
-    return HTMLResponse(p.read_text()) if p.exists() else HTMLResponse("<h1>index.html not found</h1>")
-
-
-# ── Auth dependency ────────────────────────────────────────────────────────────
-def _get_current_user(authorization: str = Header(default="")) -> Optional[dict]:
-    """Extract and validate JWT from Authorization: Bearer <token>."""
-    if not AUTH_OK:
-        return {"sub": "anon", "email": "anon@local", "role": "builder", "name": "Anonymous"}
-    token = authorization.removeprefix("Bearer ").strip()
-    if not token:
-        return None
-    return decode_token(token)
-
-
-def _require_role(token_data: Optional[dict], *roles: str) -> bool:
-    if not token_data:
-        return False
-    return token_data.get("role","") in roles
-
-
-# ── Auth endpoints ─────────────────────────────────────────────────────────────
-
-@app.post("/api/auth/signup")
-async def signup(
-    email:        str,
-    password:     str,
-    display_name: str,
-    role:         str = "trader",
-    request: Optional[Any] = None,
-):
-    if not AUTH_OK:
-        return JSONResponse({"error": "Auth system unavailable"}, status_code=503)
-    try:
-        r = Role(role.lower())
-    except ValueError:
-        r = Role.TRADER
-
-    user, err = UserManager.create(email, password, display_name, r)
-    if not user:
-        audit("signup_fail", success=False, email=email, detail=err)
-        return JSONResponse({"error": err}, status_code=400)
-
-    access  = create_access_token(user)
-    refresh = UserManager.create_session(user.id)
-    audit("signup", user_id=user.id, email=email, detail=f"role={r.value}")
-    return {
-        "access_token":  access,
-        "refresh_token": refresh,
-        "token_type":    "bearer",
-        "user":          user.to_dict(),
-    }
-
-
-@app.post("/api/auth/login")
-async def login(email: str, password: str):
-    if not AUTH_OK:
-        return JSONResponse({"error": "Auth system unavailable"}, status_code=503)
-    user, err = UserManager.authenticate(email, password)
-    if not user:
-        audit("login_fail", success=False, email=email, detail=err)
-        return JSONResponse({"error": err}, status_code=401)
-
-    access  = create_access_token(user)
-    refresh = UserManager.create_session(user.id)
-    audit("login", user_id=user.id, email=email)
-    return {
-        "access_token":  access,
-        "refresh_token": refresh,
-        "token_type":    "bearer",
-        "user":          user.to_dict(),
-    }
-
-
-@app.post("/api/auth/logout")
-async def logout(refresh_token: str = "", authorization: str = Header(default="")):
-    if refresh_token:
-        UserManager.revoke_session(refresh_token)
-    token_data = _get_current_user(authorization)
-    if token_data:
-        audit("logout", user_id=token_data.get("sub"), email=token_data.get("email"))
-    return {"logged_out": True}
-
-
-@app.get("/api/auth/me")
-async def get_me_v2(authorization: str = Header(default="")):
-    td = _get_current_user(authorization)
-    if not td:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    user = UserManager.get_by_id(td["sub"])
-    return user.to_dict() if user else JSONResponse({"error": "User not found"}, status_code=404)
-
-
-@app.post("/api/auth/change-password")
-async def change_password(
-    current_password: str,
-    new_password:     str,
-    authorization:    str = Header(default=""),
-):
-    td = _get_current_user(authorization)
-    if not td:
-        return JSONResponse({"error": "Not authenticated"}, status_code=401)
-    user = UserManager.get_by_id(td["sub"])
-    if not user:
-        return JSONResponse({"error": "User not found"}, status_code=404)
-    from core.auth_db import verify_password
-    if not verify_password(current_password, user.hashed_password):
-        return JSONResponse({"error": "Current password is incorrect"}, status_code=400)
-    ok, err = UserManager.change_password(user.id, new_password)
-    if not ok:
-        return JSONResponse({"error": err}, status_code=400)
-    audit("password_change", user_id=user.id, email=user.email)
-    return {"changed": True, "message": "Password updated. All sessions have been revoked."}
-
-
-# ── Admin endpoints (BUILDER + ADMIN only) ─────────────────────────────────────
-
-@app.get("/api/admin/users")
-async def admin_get_users(authorization: str = Header(default="")):
-    td = _get_current_user(authorization)
-    if not _require_role(td, "admin", "builder"):
-        return JSONResponse({"error": "Insufficient permissions"}, status_code=403)
-    return UserManager.all_users()
-
-
-@app.get("/api/admin/audit-log")
-async def admin_audit_log(
-    limit:         int = 100,
-    authorization: str = Header(default=""),
-):
-    td = _get_current_user(authorization)
-    if not _require_role(td, "admin", "builder"):
-        return JSONResponse({"error": "Insufficient permissions"}, status_code=403)
-    return get_audit_log(limit)
-
-
-@app.post("/api/admin/users/{user_id}/deactivate")
-async def admin_deactivate_user(user_id: str, authorization: str = Header(default="")):
-    td = _get_current_user(authorization)
-    if not _require_role(td, "admin"):
-        return JSONResponse({"error": "Admin only"}, status_code=403)
-    ok = UserManager.deactivate(user_id)
-    return {"deactivated": ok}
-
-# ── patch Any import ────────────────────────────────────────────────────────────
-from typing import Any
 
 
 # ═════════════════════════════════════════════════════════════════════════════

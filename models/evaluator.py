@@ -111,6 +111,10 @@ class EvalResult:
     # Confusion matrix
     tp: int = 0; fp: int = 0; tn: int = 0; fn: int = 0
 
+    # Eval context
+    threshold: float = 0.5
+    n_samples: int = 0
+
     # Tier
     tier: Tier = Tier.D
 
@@ -141,6 +145,8 @@ class EvalResult:
             "hit_rate_80":   round(self.hit_rate_80, 4),
             "hit_rate_90":   round(self.hit_rate_90, 4),
             "confusion_matrix": {"tp":self.tp,"fp":self.fp,"tn":self.tn,"fn":self.fn},
+            "threshold":     round(self.threshold, 4),
+            "n_samples":     int(self.n_samples),
             "upgrade_actions": self.upgrade_actions,
         }
 
@@ -149,6 +155,19 @@ class EvalResult:
 
 class ModelEvaluator:
     """Full hedge-fund-grade model evaluation."""
+
+    @staticmethod
+    def directional_confidence(y_prob: np.ndarray) -> np.ndarray:
+        """
+        Convert class-1 probability into directional confidence.
+
+        Example:
+          prob=0.82  -> LONG confidence 0.82
+          prob=0.18  -> SHORT confidence 0.82
+          prob=0.50  -> no edge, confidence 0.50
+        """
+        y_prob = np.asarray(y_prob, dtype=float)
+        return np.maximum(y_prob, 1.0 - y_prob)
 
     def evaluate(
         self,
@@ -171,6 +190,8 @@ class ModelEvaluator:
         y_pred = (y_prob >= threshold).astype(int)
         n      = len(y_true)
         result = EvalResult(model_name=model_name)
+        result.threshold = float(threshold)
+        result.n_samples = int(n)
 
         # ── Classification metrics ────────────────────────────────────────
         if SKLEARN_OK and n >= 10:
@@ -324,10 +345,10 @@ class ModelEvaluator:
         y_true: np.ndarray, y_prob: np.ndarray, min_conf: float
     ) -> float:
         """
-        Accuracy for samples where |prob - 0.5| * 2 >= min_conf.
+        Accuracy for samples where directional confidence >= min_conf.
         This is the key hedge fund metric — accuracy when the model is confident.
         """
-        conf = np.abs(y_prob - 0.5) * 2.0
+        conf = ModelEvaluator.directional_confidence(y_prob)
         mask = conf >= min_conf
         if mask.sum() < 3:
             return 0.0
@@ -411,6 +432,8 @@ class EvalStore:
                     "model":         latest.model_name,
                     "tier":          latest.tier.value,
                     "accuracy":      round(latest.accuracy, 4),
+                    "precision":     round(latest.precision, 4),
+                    "recall":        round(latest.recall, 4),
                     "f1":            round(latest.f1, 4),
                     "roc_auc":       round(latest.roc_auc, 4),
                     "mcc":           round(latest.mcc, 4),
@@ -420,6 +443,8 @@ class EvalStore:
                     "hit_rate_80":   round(latest.hit_rate_80, 4),
                     "hit_rate_90":   round(latest.hit_rate_90, 4),
                     "max_drawdown":  round(latest.max_drawdown, 4),
+                    "threshold":     round(latest.threshold, 4),
+                    "n_samples":     int(latest.n_samples),
                     "timestamp":     latest.timestamp.isoformat(),
                 })
         return result
@@ -451,3 +476,10 @@ class AutoUpgrader:
                 f"suggestions: {result.upgrade_actions[:2]}"
             )
         return result
+
+
+# Backward-compatible exports used by the dashboard module.
+AutoUpgradeEngine = AutoUpgrader
+evaluator = ModelEvaluator()
+eval_store = EvalStore()
+upgrader = AutoUpgrader()

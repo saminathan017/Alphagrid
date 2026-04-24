@@ -1,26 +1,8 @@
 """
-core/auth_db.py  —  AlphaGrid v7
-==================================
-Authentication & Authorization.
+Authentication and authorization for AlphaGrid.
 
-Owner account:
-  username : admin
-  password : Admin@Grid1
-  role     : ADMIN (full access)
-  is_owner : True  (cannot be deactivated, cannot be deleted)
-
-Owner login is special — they can sign in with just their USERNAME
-instead of an email address. All other accounts require email.
-
-Login resolution order:
-  1. Try username match (case-insensitive)
-  2. Try email match (case-insensitive)
-  → first match wins
-
-Stack: SQLAlchemy + SQLite · passlib[bcrypt] · python-jose JWT
-
-Install:
-  pip install passlib[bcrypt] python-jose[cryptography] sqlalchemy
+The application maintains one protected owner account with admin access.
+All other self-created accounts are standard user accounts.
 """
 from __future__ import annotations
 
@@ -65,9 +47,18 @@ DB_PATH       = Path(__file__).parent.parent / "alphagrid_auth.db"
 
 # ── Owner defaults — override via environment variables in .env ───────────────
 OWNER_USERNAME  = os.getenv("ALPHAGRID_OWNER_USERNAME", "admin")
-OWNER_PASSWORD  = os.getenv("ALPHAGRID_OWNER_PASSWORD", "Admin@Grid1")
+_OWNER_PASSWORD_FROM_ENV = os.getenv("ALPHAGRID_OWNER_PASSWORD", "").strip()
+OWNER_PASSWORD  = _OWNER_PASSWORD_FROM_ENV or secrets.token_urlsafe(20)
+OWNER_PASSWORD_IS_AUTO = not bool(_OWNER_PASSWORD_FROM_ENV)
 OWNER_EMAIL     = os.getenv("ALPHAGRID_OWNER_EMAIL",    "owner@alphagrid.app")
 OWNER_NAME      = "Owner"
+LEGACY_OWNER_PASSWORD = "Admin@Grid1"
+LEGACY_PUBLIC_ACCOUNT_EMAILS = {
+    "builder@alphagrid.app",
+    "trader@alphagrid.app",
+    "demo@alphagrid.app",
+}
+LEGACY_PUBLIC_ACCOUNT_USERNAMES = {"builder", "trader", "demo", "builder_demo", "trader_demo", "demo_demo"}
 
 
 # ── Roles ─────────────────────────────────────────────────────────────────────
@@ -265,12 +256,9 @@ class _UserManager:
 
     Login accepts:
       - username  (exact match, case-insensitive) → any account
-      - email     (exact match, case-insensitive) → any account
+      - email     (exact match, case-insensitive) → standard accounts
 
-    Owner account:
-      username : admin
-      password : Admin@Grid1
-      Can only be looked up by username — no email required on login page.
+    The owner account is intended to sign in with username only.
     """
 
     # ── Lookup ─────────────────────────────────────────────────────────────
@@ -301,7 +289,7 @@ class _UserManager:
         """
         Resolve login identifier to a User.
         Tries username first, then email.
-        Case-insensitive for both.
+        Case-insensitive for both. The owner account is only resolved by username.
         """
         ident = identifier.strip()
         # Try username
@@ -310,7 +298,9 @@ class _UserManager:
             return u
         # Try email (only if it looks like an email)
         if "@" in ident:
-            return self.get_by_email(ident)
+            u = self.get_by_email(ident)
+            if u and not u.is_owner:
+                return u
         return None
 
     # ── Create ─────────────────────────────────────────────────────────────
@@ -401,10 +391,20 @@ class _UserManager:
         identifier can be a username OR email address.
         Returns (User, "") on success or (None, error_message) on failure.
         """
+        normalized_identifier = (identifier or "").strip().lower()
         user = self.resolve(identifier)
 
         if not user:
             # Give a generic message — don't reveal whether username/email exists
+            return None, "Invalid username or password"
+
+        if user.is_owner and normalized_identifier != OWNER_USERNAME.lower():
+            self._write_audit(
+                "login_fail", False,
+                user_id=user.id, username=user.username,
+                email=user.email, ip=ip,
+                detail="owner login attempted without configured username",
+            )
             return None, "Invalid username or password"
 
         if not user.is_active:
@@ -627,19 +627,14 @@ user_manager = _UserManager()
 
 def seed_default_accounts() -> None:
     """
-    Create default accounts on startup if they don't exist.
+    Ensure the protected owner account exists.
 
-    Owner account (username login, no email needed on login page):
-      username : ALPHAGRID_OWNER_USERNAME  (default: admin)
-      password : ALPHAGRID_OWNER_PASSWORD  (default: Admin@Grid1 — change after first login)
-      role     : ADMIN
-      is_owner : True  ← cannot be deactivated
-
-    Demo accounts (email login):
-      ALPHAGRID_BUILDER_PASSWORD  → builder@alphagrid.app  (BUILDER)
-      ALPHAGRID_TRADER_PASSWORD   → trader@alphagrid.app   (TRADER)
+    The repository no longer seeds public demo, builder, or trader accounts.
+    Any legacy public accounts are deactivated, and non-owner elevated roles
+    are demoted to standard user access.
     """
     created = 0
+    changed = 0
 
     # ── Owner ─────────────────────────────────────────────────────────────
     owner = user_manager.get_by_username(OWNER_USERNAME)
@@ -654,10 +649,14 @@ def seed_default_accounts() -> None:
         )
         if u:
             created += 1
-            logger.info(
-                f"Owner account seeded | username: {OWNER_USERNAME} "
-                f"| CHANGE THIS PASSWORD AFTER FIRST LOGIN"
-            )
+            if OWNER_PASSWORD_IS_AUTO:
+                logger.warning(
+                    "Owner account created with a generated password because "
+                    "ALPHAGRID_OWNER_PASSWORD is not set. Save this password now "
+                    f"and move it into .env | username: {OWNER_USERNAME} | password: {OWNER_PASSWORD}"
+                )
+            else:
+                logger.info(f"Owner account seeded from environment | username: {OWNER_USERNAME}")
         else:
             logger.error(f"Failed to seed owner: {err}")
     else:
@@ -667,35 +666,43 @@ def seed_default_accounts() -> None:
                 u = s.query(User).filter_by(id=owner.id).first()
                 if u:
                     u.is_owner = True
+                    changed += 1
                     s.commit()
-
-    # ── Demo accounts ──────────────────────────────────────────────────────
-    demos = [
-        ("builder@alphagrid.app", os.getenv("ALPHAGRID_BUILDER_PASSWORD", "Builder1!"), "Builder", UserRole.BUILDER, "builder"),
-        ("trader@alphagrid.app",  os.getenv("ALPHAGRID_TRADER_PASSWORD",  "Trader1!"),  "Trader",  UserRole.TRADER,  "trader"),
-        ("demo@alphagrid.app",    "demo1234", "Demo User", UserRole.TRADER, "demo"),
-    ]
-    for em, pw, name, role, uname in demos:
-        if not user_manager.get_by_email(em):
-            u, err = user_manager.create_user(
-                email=em, password=pw, display_name=name,
-                role=role, username=uname,
+        if OWNER_PASSWORD_IS_AUTO and _verify_password(LEGACY_OWNER_PASSWORD, owner.hashed_password):
+            with get_auth_session() as s:
+                u = s.query(User).filter_by(id=owner.id).first()
+                if u:
+                    u.hashed_password = _hash_password(OWNER_PASSWORD)
+                    changed += 1
+                    s.commit()
+            logger.warning(
+                "Legacy default owner password detected and rotated automatically. "
+                "Save this password and set ALPHAGRID_OWNER_PASSWORD in .env "
+                f"| username: {OWNER_USERNAME} | password: {OWNER_PASSWORD}"
             )
-            if u:
-                created += 1
-                logger.info(f"Demo account seeded: @{uname} <{em}>")
-            else:
-                # Username conflict — try with suffix
-                u, err = user_manager.create_user(
-                    email=em, password=pw, display_name=name,
-                    role=role, username=uname + "_demo",
-                )
-                if u: created += 1
 
-    if created:
-        logger.info(f"Auth DB: {created} account(s) seeded | DB: {DB_PATH}")
+    with get_auth_session() as s:
+        rows = s.query(User).filter_by(is_owner=False).all()
+        for u in rows:
+            updated = False
+            if u.role != UserRole.TRADER.value:
+                u.role = UserRole.TRADER.value
+                updated = True
+            if (
+                (u.email or "").lower() in LEGACY_PUBLIC_ACCOUNT_EMAILS
+                or (u.username or "").lower() in LEGACY_PUBLIC_ACCOUNT_USERNAMES
+            ) and u.is_active:
+                u.is_active = False
+                updated = True
+            if updated:
+                changed += 1
+        if changed:
+            s.commit()
+
+    if created or changed:
+        logger.info(f"Auth DB ready | created={created} changed={changed} | DB: {DB_PATH}")
     else:
-        logger.info(f"Auth DB: all accounts present | DB: {DB_PATH}")
+        logger.info(f"Auth DB ready | no auth changes required | DB: {DB_PATH}")
 
 
 # ── Backward-compat for older import patterns ─────────────────────────────────

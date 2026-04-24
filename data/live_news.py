@@ -3,7 +3,7 @@ data/live_news.py
 =================
 Real-time financial news engine.
 Sources (all free, no API key required):
-  • Yahoo Finance RSS  — market headlines + per-ticker news
+  • Yahoo Finance RSS  — per-ticker news
   • Reuters RSS        — global business/finance
   • CNBC RSS           — US markets
   • MarketWatch RSS    — stocks, economy, forex
@@ -26,10 +26,13 @@ import asyncio
 import hashlib
 import html
 import re
+import ssl
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Optional
+from urllib.request import Request as UrlRequest, urlopen
+from xml.etree import ElementTree as ET
 
 from loguru import logger
 
@@ -46,11 +49,17 @@ try:
 except ImportError:
     AIOHTTP_OK = False
 
+RSS_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; AlphaGridNews/1.0; +https://localhost)",
+    "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+}
+RSS_TIMEOUT = 8.0
+TICKER_REFRESH_SECONDS = 60.0
+
 
 # ── RSS sources (no API key, no auth) ────────────────────────────────────────
 RSS_SOURCES = [
     # General market
-    {"url": "https://feeds.finance.yahoo.com/rss/2.0/headline?region=US&lang=en-US", "source": "Yahoo Finance"},
     {"url": "https://feeds.reuters.com/reuters/businessNews",                         "source": "Reuters"},
     {"url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",                  "source": "CNBC"},
     {"url": "https://www.marketwatch.com/rss/topstories",                             "source": "MarketWatch"},
@@ -61,6 +70,19 @@ RSS_SOURCES = [
     {"url": "https://www.dailyfx.com/feeds/market-news",                              "source": "DailyFX"},
     {"url": "https://www.fxstreet.com/rss/news",                                      "source": "FXStreet"},
 ]
+
+SOURCE_TRUST_RANK = {
+    "Reuters": 6.0,
+    "CNBC": 5.0,
+    "MarketWatch": 4.6,
+    "Financial Times": 4.5,
+    "Seeking Alpha": 4.2,
+    "Benzinga": 4.0,
+    "Yahoo Finance": 3.8,
+    "Investing.com": 3.6,
+    "DailyFX": 3.5,
+    "FXStreet": 3.5,
+}
 
 # Per-ticker Yahoo Finance RSS
 TICKER_RSS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
@@ -120,6 +142,37 @@ COMPANY_TICKERS = {
     "fed": None, "federal reserve": None, "ecb": None,
 }
 
+SYMBOL_ALIASES = defaultdict(set)
+for company_name, ticker in COMPANY_TICKERS.items():
+    if ticker:
+        SYMBOL_ALIASES[ticker].add(company_name)
+
+SYMBOL_ALIASES.update({
+    "AAPL": {"apple", "iphone", "ipad", "mac"},
+    "MSFT": {"microsoft", "azure", "xbox"},
+    "NVDA": {"nvidia", "geforce", "cuda"},
+    "GOOGL": {"alphabet", "google", "youtube"},
+    "META": {"meta", "facebook", "instagram", "whatsapp"},
+    "AMZN": {"amazon", "aws"},
+    "TSLA": {"tesla", "model 3", "model y"},
+    "PLTR": {"palantir"},
+    "AMD": {"amd", "advanced micro devices"},
+    "INTC": {"intel"},
+    "AVGO": {"broadcom"},
+    "QCOM": {"qualcomm"},
+    "CRM": {"salesforce"},
+    "ORCL": {"oracle"},
+    "JPM": {"jpmorgan", "jp morgan"},
+    "BAC": {"bank of america", "bofa"},
+    "GS": {"goldman sachs", "goldman"},
+    "MS": {"morgan stanley"},
+    "EURUSD=X": {"eur/usd", "eurusd", "euro", "euro dollar"},
+    "GBPUSD=X": {"gbp/usd", "gbpusd", "pound", "sterling"},
+    "USDJPY=X": {"usd/jpy", "usdjpy", "yen"},
+    "XAUUSD=X": {"xau/usd", "gold"},
+    "XAGUSD=X": {"xag/usd", "silver"},
+})
+
 CATEGORY_PATTERNS = {
     "earnings":  r"\b(earnings|revenue|eps|profit|quarter|q[1-4])\b",
     "macro":     r"\b(fed|rate|inflation|gdp|cpi|pce|employment|jobs)\b",
@@ -156,33 +209,21 @@ class LiveNewsFeed:
 
     async def _fetch_rss(self, source: dict) -> list[dict]:
         """Fetch and parse a single RSS feed."""
-        if not FEEDPARSER_OK:
-            return []
         url = source["url"]
         try:
             loop = asyncio.get_event_loop()
-            feed = await asyncio.wait_for(
-                loop.run_in_executor(None, feedparser.parse, url),
-                timeout=8.0,
+            if FEEDPARSER_OK:
+                feed = await asyncio.wait_for(
+                    loop.run_in_executor(None, feedparser.parse, url),
+                    timeout=RSS_TIMEOUT,
+                )
+                articles = self._articles_from_entries(feed.entries or [], source["source"])
+                if articles:
+                    return articles
+            return await asyncio.wait_for(
+                loop.run_in_executor(None, self._fetch_rss_stdlib, url, source["source"]),
+                timeout=RSS_TIMEOUT,
             )
-            articles = []
-            for entry in (feed.entries or [])[:25]:
-                raw_title   = entry.get("title", "")
-                raw_summary = entry.get("summary", "")
-                # Strip HTML tags from summary
-                clean_summary = re.sub(r"<[^>]+>", " ", raw_summary)
-                clean_summary = html.unescape(clean_summary)[:400]
-                clean_title   = html.unescape(raw_title)
-
-                articles.append({
-                    "headline":  clean_title,
-                    "summary":   clean_summary.strip(),
-                    "url":       entry.get("link", ""),
-                    "source":    source["source"],
-                    "published": entry.get("published", datetime.utcnow().isoformat()),
-                    "published_ts": self._parse_ts(entry.get("published", "")),
-                })
-            return articles
         except asyncio.TimeoutError:
             logger.debug(f"RSS timeout: {url[:60]}")
             return []
@@ -190,14 +231,59 @@ class LiveNewsFeed:
             logger.debug(f"RSS error {url[:60]}: {e}")
             return []
 
+    def _fetch_rss_stdlib(self, url: str, source_name: str) -> list[dict]:
+        """Parse RSS/Atom with only the Python stdlib when feedparser is unavailable."""
+        try:
+            req = UrlRequest(url, headers=RSS_HEADERS)
+            ctx = ssl._create_unverified_context()
+            with urlopen(req, timeout=RSS_TIMEOUT, context=ctx) as resp:
+                raw = resp.read()
+            root = ET.fromstring(raw)
+        except Exception as e:
+            logger.debug(f"RSS stdlib fetch error {url[:60]}: {e}")
+            return []
+
+        entries: list[dict] = []
+        for node in root.iter():
+            tag = self._local_tag(node.tag)
+            if tag not in {"item", "entry"}:
+                continue
+            title = self._node_text(node, {"title"})
+            summary = self._node_text(node, {"description", "summary", "content", "encoded"})
+            published = self._node_text(node, {"pubDate", "published", "updated"})
+            link = self._node_link(node)
+            if not title and not link:
+                continue
+            entries.append({
+                "headline": html.unescape(title or "").strip(),
+                "summary": self._clean_summary(summary),
+                "url": link,
+                "source": source_name,
+                "published": published or datetime.utcnow().isoformat(),
+                "published_ts": self._parse_ts(published or ""),
+            })
+        return entries[:25]
+
+    def _articles_from_entries(self, entries, source_name: str) -> list[dict]:
+        articles = []
+        for entry in list(entries)[:25]:
+            raw_title = entry.get("title", "")
+            raw_summary = entry.get("summary", "") or entry.get("description", "")
+            articles.append({
+                "headline": html.unescape(raw_title).strip(),
+                "summary": self._clean_summary(raw_summary),
+                "url": entry.get("link", ""),
+                "source": source_name,
+                "published": entry.get("published", datetime.utcnow().isoformat()),
+                "published_ts": self._parse_ts(entry.get("published", "")),
+            })
+        return articles
+
     async def _fetch_ticker_rss(self, symbol: str) -> list[dict]:
         """Fetch Yahoo Finance ticker-specific RSS."""
         clean_sym = symbol.replace("=X", "").replace("_", "")
         url = TICKER_RSS.format(symbol=clean_sym)
-        articles = await self._fetch_rss({"url": url, "source": f"Yahoo:{symbol}"})
-        for art in articles:
-            art["symbols"] = [symbol]
-        return articles
+        return await self._fetch_rss({"url": url, "source": f"Yahoo:{symbol}"})
 
     async def fetch_all(self) -> int:
         """Fetch all sources concurrently. Returns count of new articles."""
@@ -211,38 +297,7 @@ class LiveNewsFeed:
                 all_articles.extend(r)
 
         # Enrich and deduplicate
-        new_count = 0
-        for art in all_articles:
-            art_id = hashlib.md5(
-                (art.get("url") or art.get("headline", "")).encode()
-            ).hexdigest()
-            if art_id in self._seen:
-                continue
-            self._seen.add(art_id)
-            if len(self._seen) > 5000:
-                # Trim old entries
-                self._seen = set(list(self._seen)[-3000:])
-
-            # Enrich article
-            art["id"]          = art_id
-            art["symbols"]     = art.get("symbols") or self._extract_symbols(art)
-            art["sentiment"]   = self._score_sentiment(art)
-            art["category"]    = self._classify(art)
-            art["fetched_at"]  = datetime.utcnow().isoformat()
-
-            self._articles.appendleft(art)
-            new_count += 1
-
-            # Update sentiment buffer
-            score = art["sentiment"]["score"]
-            ts    = time.time()
-            for sym in art["symbols"]:
-                self._sentiment[sym].append((ts, score))
-                # Trim old
-                cutoff = ts - self.SENTIMENT_TTL
-                self._sentiment[sym] = [
-                    (t, s) for t, s in self._sentiment[sym] if t >= cutoff
-                ]
+        new_count = self._ingest_articles(all_articles)
 
         self._last_fetch  = time.time()
         self._fetch_count += 1
@@ -252,22 +307,15 @@ class LiveNewsFeed:
 
     async def fetch_ticker(self, symbol: str) -> int:
         """Fetch ticker-specific news and merge."""
+        now = time.time()
+        if not self._last_fetch or (now - self._last_fetch) > TICKER_REFRESH_SECONDS:
+            try:
+                await self.fetch_all()
+            except Exception as e:
+                logger.debug(f"General news refresh failed for {symbol}: {e}")
         arts = await self._fetch_ticker_rss(symbol)
-        new_count = 0
-        for art in arts:
-            art_id = hashlib.md5(
-                (art.get("url") or art.get("headline","")).encode()
-            ).hexdigest()
-            if art_id in self._seen:
-                continue
-            self._seen.add(art_id)
-            art["id"]        = art_id
-            art["symbols"]   = art.get("symbols") or [symbol]
-            art["sentiment"] = self._score_sentiment(art)
-            art["category"]  = self._classify(art)
-            art["fetched_at"]= datetime.utcnow().isoformat()
-            self._articles.appendleft(art)
-            new_count += 1
+        new_count = self._ingest_articles(arts)
+        self._backfill_symbol_matches(symbol)
         return new_count
 
     # ── Sentiment scoring ─────────────────────────────────────────────────
@@ -366,7 +414,14 @@ class LiveNewsFeed:
         """Return latest articles, optionally filtered."""
         arts = list(self._articles)
         if symbol:
-            arts = [a for a in arts if symbol in a.get("symbols", [])]
+            arts = [a for a in arts if self._article_relevance(a, symbol) > 0]
+            arts.sort(
+                key=lambda a: (
+                    self._article_relevance(a, symbol),
+                    a.get("published_ts", 0),
+                ),
+                reverse=True,
+            )
         if category:
             arts = [a for a in arts if a.get("category") == category]
         return arts[:limit]
@@ -408,6 +463,117 @@ class LiveNewsFeed:
             return t.timestamp()
         except Exception:
             return time.time()
+
+    @staticmethod
+    def _clean_summary(raw_summary: str) -> str:
+        clean_summary = re.sub(r"<[^>]+>", " ", raw_summary or "")
+        clean_summary = html.unescape(clean_summary)
+        clean_summary = re.sub(r"\s+", " ", clean_summary).strip()
+        return clean_summary[:400]
+
+    @staticmethod
+    def _local_tag(tag: str) -> str:
+        return tag.split("}", 1)[-1].lower() if tag else ""
+
+    def _node_text(self, node, names: set[str]) -> str:
+        target = {name.lower() for name in names}
+        for child in list(node):
+            if self._local_tag(child.tag) in target:
+                return (child.text or "").strip()
+        return ""
+
+    def _node_link(self, node) -> str:
+        for child in list(node):
+            if self._local_tag(child.tag) != "link":
+                continue
+            href = (child.attrib or {}).get("href")
+            if href:
+                return href.strip()
+            if child.text:
+                return child.text.strip()
+        return ""
+
+    def _ingest_articles(self, articles: list[dict], forced_symbol: Optional[str] = None) -> int:
+        new_count = 0
+        for art in articles:
+            art_id = hashlib.md5(
+                (art.get("url") or art.get("headline", "")).encode()
+            ).hexdigest()
+            if art_id in self._seen:
+                continue
+            self._seen.add(art_id)
+            if len(self._seen) > 5000:
+                self._seen = set(list(self._seen)[-3000:])
+
+            symbols = art.get("symbols") or self._extract_symbols(art)
+            if forced_symbol and forced_symbol not in symbols:
+                symbols = [forced_symbol] + list(symbols)
+
+            art["id"] = art_id
+            art["symbols"] = list(dict.fromkeys(symbols))
+            art["sentiment"] = self._score_sentiment(art)
+            art["category"] = self._classify(art)
+            art["fetched_at"] = datetime.utcnow().isoformat()
+            self._articles.appendleft(art)
+            self._register_sentiment(art)
+            new_count += 1
+        return new_count
+
+    def _register_sentiment(self, art: dict) -> None:
+        score = art["sentiment"]["score"]
+        ts = time.time()
+        cutoff = ts - self.SENTIMENT_TTL
+        for sym in art.get("symbols", []):
+            self._sentiment[sym].append((ts, score))
+            self._sentiment[sym] = [(t, s) for t, s in self._sentiment[sym] if t >= cutoff]
+
+    def _symbol_aliases(self, symbol: str) -> set[str]:
+        aliases = set(SYMBOL_ALIASES.get(symbol, set()))
+        aliases.add(symbol.lower())
+        aliases.add(symbol.replace("=X", "").lower())
+        if "=" in symbol:
+            clean = symbol.replace("=X", "")
+            if len(clean) == 6:
+                aliases.add(f"{clean[:3].lower()}/{clean[3:].lower()}")
+                aliases.add(clean.lower())
+        return {a for a in aliases if a}
+
+    def _article_relevance(self, art: dict, symbol: str) -> float:
+        sym = symbol.upper()
+        text = f"{art.get('headline','')} {art.get('summary','')}".lower()
+        headline = art.get("headline", "").lower()
+        score = 0.0
+        matched = False
+        if sym in art.get("symbols", []):
+            score += 4.0
+            matched = True
+        for alias in self._symbol_aliases(sym):
+            if alias in headline:
+                score += 3.5
+                matched = True
+            elif alias in text:
+                score += 1.8
+                matched = True
+        if not matched:
+            return 0.0
+        source = art.get("source", "")
+        for source_name, bonus in SOURCE_TRUST_RANK.items():
+            if source_name.lower() in source.lower():
+                score += bonus
+                break
+        if art.get("category") in {"earnings", "analyst", "merger"}:
+            score += 0.5
+        return round(score, 3)
+
+    def _backfill_symbol_matches(self, symbol: str) -> None:
+        sym = symbol.upper()
+        for art in list(self._articles)[:200]:
+            if sym in art.get("symbols", []):
+                continue
+            if self._article_relevance(art, sym) < 4.0:
+                continue
+            art["symbols"] = list(dict.fromkeys([*art.get("symbols", []), sym]))
+            self._register_sentiment(art)
 
 
 # Global singleton

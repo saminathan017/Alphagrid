@@ -7,8 +7,8 @@ All notable changes to AlphaGrid are documented here.
 ## [v7.1] — 2026-03-23
 
 ### Added
-- **Live demo** — one-click "Try Live Demo" button on login page (no sign-up)
-- **Demo account** — `demo` / `demo1234` seeded automatically on startup (Trader role)
+- **Live demo** — one-click demo access on the login page (since removed in later hardening work)
+- **Demo account** — a seeded demo user account was added temporarily during that release cycle
 - **⚡ FIRE button** — every signal card now executes a real paper trade with qty input
 - **Overview panels** — Holdings (positions + allocation %), Top Movers (live gainers/losers), Top Signals (top 12 by confidence)
 - **Drawdown curve, Risk Limits, Position Exposure** moved from Risk page into Overview
@@ -16,10 +16,10 @@ All notable changes to AlphaGrid are documented here.
 - **Cumulative P&L per Trade** bar chart on Trades page (replaces duplicate equity curve)
 - **Backtest results** — +56% total return, 17.3% CAGR, 0.56 Sharpe over 2022–2024
 - **Dockerfile** (python:3.11-slim, no GPU) for lightweight serving
-- **docker-compose.yml** — one-command local deployment with persistent volumes
-- **railway.json** — Railway deployment config (auto-detects Dockerfile, healthcheck)
-- **render.yaml** — Render web service config with persistent disk
-- **Procfile** — Heroku / generic PaaS fallback
+- **deploy/docker-compose.yml** — one-command local deployment with persistent volumes
+- **deploy/railway.json** — Railway deployment config (auto-detects Dockerfile, healthcheck)
+- **deploy/render.yaml** — Render web service config with persistent disk
+- **deploy/Procfile** — Heroku / generic PaaS fallback
 - **.dockerignore** — excludes venv/, local DB, .env from Docker image
 
 ### Changed
@@ -31,12 +31,12 @@ All notable changes to AlphaGrid are documented here.
 - `app.py` default signal limit raised from 20 to 500
 - Login page: removed exposed default credentials panel (security fix)
 - Login page: replaced "Multi-broker execution — Alpaca, OANDA, Robinhood" with accurate "Paper trading" and "150 assets" bullet points
-- README completely rewritten with live demo link, real backtest numbers, accurate tech stack, deploy guides
+- README completely rewritten with updated product overview, tech stack, and deploy guides
 
 ### Fixed
 - `bcrypt>=4.0` incompatibility with `passlib` — pinned `bcrypt<4.0` in Dockerfile; broadened exception catch from `ImportError` to `Exception`
 - Local `alphagrid_auth.db` was being baked into Docker image — `.dockerignore` now excludes it; server seeds fresh accounts on every clean deploy
-- Demo password `demo123` was 7 characters (minimum is 8) — changed to `demo1234`
+- Demo password length issue fixed during that release cycle
 - Chart endpoint returning HTTP 404 on Railway (no parquet cache) — added live yfinance fallback
 - Price feed loop loading 0 symbols on Railway — added batch yfinance fallback per symbol
 - Cold start time reduced from 5–10 minutes to ~15 seconds — priority 18 symbols now fetched in one `yf.download()` batch call on startup; rest load in background
@@ -47,7 +47,7 @@ All notable changes to AlphaGrid are documented here.
 - Strategy Distribution chart from Signals page
 - System Log panel from Overview
 - Live Signals mini panel from Overview
-- Dockerfile.train renamed from Dockerfile (old GPU training image preserved as Dockerfile.train)
+- Dockerfile.train renamed from Dockerfile (old GPU training image preserved as deploy/Dockerfile.train)
 
 ---
 
@@ -55,12 +55,12 @@ All notable changes to AlphaGrid are documented here.
 
 ### Added
 - LICENSE file (MIT)
-- CHANGELOG.md
+- docs/CHANGELOG.md
 
 ### Changed
 - Bumped project version to v7 across all source files and documentation
 - Removed hardcoded local filesystem paths from documentation
-- `SETUP.md` folder references updated from `alphagrid-v6` to `alphagrid`
+- `docs/SETUP.md` folder references updated from `alphagrid-v6` to `alphagrid`
 
 ### Removed
 - History page from the dashboard
